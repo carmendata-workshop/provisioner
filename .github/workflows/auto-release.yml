@@ -1,0 +1,190 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should-release: ${{ steps.version.outputs.should-release }}
+      new-version: ${{ steps.version.outputs.new-version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for version calculation
+
+    - name: Calculate new version
+      id: version
+      run: |
+        chmod +x scripts/version.sh
+        NEW_VERSION=$(./scripts/version.sh)
+        LAST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+        echo "Last version: $LAST_VERSION"
+        echo "New version: $NEW_VERSION"
+
+        if [ "$NEW_VERSION" != "$LAST_VERSION" ]; then
+          echo "should-release=true" >> $GITHUB_OUTPUT
+          echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Should create release: $NEW_VERSION"
+        else
+          echo "should-release=false" >> $GITHUB_OUTPUT
+          echo "No version bump needed"
+        fi
+
+    - name: Generate changelog
+      id: changelog
+      if: steps.version.outputs.should-release == 'true'
+      run: |
+        LAST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+        echo "## Changes" > changelog.md
+        echo "" >> changelog.md
+
+        # Get commits since last tag
+        if [ "$LAST_VERSION" = "v0.0.0" ]; then
+          COMMITS=$(git log --oneline --pretty=format:"- %s" HEAD)
+          echo "## 🎯 Initial MVP Release" >> changelog.md
+          echo "" >> changelog.md
+          echo "This is the first release of the OpenTofu Environment Scheduler MVP." >> changelog.md
+          echo "" >> changelog.md
+          echo "### ✨ MVP Features" >> changelog.md
+          echo "- Automatic environment deployment and destruction based on CRON schedules" >> changelog.md
+          echo "- Multiple environment support with overlapping schedules" >> changelog.md
+          echo "- State persistence across application restarts" >> changelog.md
+          echo "- OpenTofu integration with automatic binary management" >> changelog.md
+          echo "- Systemd service with FHS-compliant installation" >> changelog.md
+          echo "- Conventional commit-based automatic versioning" >> changelog.md
+          echo "" >> changelog.md
+        else
+          COMMITS=$(git log ${LAST_VERSION}..HEAD --oneline --pretty=format:"- %s")
+        fi
+
+        # Categorize commits
+        echo "### 🚀 Features" >> changelog.md
+        echo "$COMMITS" | grep "^- feat" | sed 's/^- feat[^:]*: /- /' >> changelog.md || echo "- No new features" >> changelog.md
+        echo "" >> changelog.md
+
+        echo "### 🐛 Bug Fixes" >> changelog.md
+        echo "$COMMITS" | grep "^- fix" | sed 's/^- fix[^:]*: /- /' >> changelog.md || echo "- No bug fixes" >> changelog.md
+        echo "" >> changelog.md
+
+        echo "### 💥 Breaking Changes" >> changelog.md
+        echo "$COMMITS" | grep -E "^- (feat!|fix!|perf!)" | sed 's/^- [^:]*: /- /' >> changelog.md || echo "- No breaking changes" >> changelog.md
+        echo "" >> changelog.md
+
+        echo "### 📝 Other Changes" >> changelog.md
+        echo "$COMMITS" | grep -v -E "^- (feat|fix)" | sed 's/^- [^:]*: /- /' >> changelog.md || echo "- No other changes" >> changelog.md
+
+        # Output for use in release
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat changelog.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.should-release == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        VERSION: ${{ needs.check-version.outputs.new-version }}
+      run: |
+        make BINARY_NAME=provisioner-${{ matrix.os }}-${{ matrix.arch }} build
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: provisioner-${{ matrix.os }}-${{ matrix.arch }}
+        path: provisioner-${{ matrix.os }}-${{ matrix.arch }}
+
+  release:
+    needs: [check-version, build]
+    if: needs.check-version.outputs.should-release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create and push tag
+      env:
+        NEW_VERSION: ${{ needs.check-version.outputs.new-version }}
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag $NEW_VERSION
+        git push origin $NEW_VERSION
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ needs.check-version.outputs.new-version }}
+        release_name: Release ${{ needs.check-version.outputs.new-version }}
+        draft: false
+        prerelease: false
+        body: |
+          ${{ needs.check-version.outputs.changelog }}
+
+          ## Installation
+
+          **Quick install (Linux):**
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/install.sh | sudo bash
+          ```
+
+          **Specific version:**
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/install.sh | sudo bash -s ${{ needs.check-version.outputs.new-version }}
+          ```
+
+    - name: Upload Release Assets
+      run: |
+        for file in provisioner-*/provisioner-*; do
+          echo "Uploading $file"
+          gh release upload ${{ needs.check-version.outputs.new-version }} "$file"
+        done
+
+        # Upload service file
+        gh release upload ${{ needs.check-version.outputs.new-version }} deployment/provisioner.service
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        VERSION: ${{ github.ref_name || github.event.inputs.tag }}
+      run: |
+        make BINARY_NAME=provisioner-${{ matrix.os }}-${{ matrix.arch }} build
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: provisioner-${{ matrix.os }}-${{ matrix.arch }}
+        path: provisioner-${{ matrix.os }}-${{ matrix.arch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name || github.event.inputs.tag }}
+        release_name: Release ${{ github.ref_name || github.event.inputs.tag }}
+        draft: false
+        prerelease: false
+        body: |
+          ## Installation
+
+          **Quick install (Linux):**
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/install.sh | sudo bash
+          ```
+
+          **Specific version:**
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/install.sh | sudo bash -s ${{ github.ref_name || github.event.inputs.tag }}
+          ```
+
+          ## Changes
+          - See commit history for detailed changes
+
+    - name: Upload Release Assets
+      run: |
+        for file in provisioner-*/provisioner-*; do
+          echo "Uploading $file"
+          gh release upload ${{ github.ref_name || github.event.inputs.tag }} "$file"
+        done
+
+        # Upload service file
+        gh release upload ${{ github.ref_name || github.event.inputs.tag }} deployment/provisioner.service
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Update install script to point to the correct repo
+  update-install-script:
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.repository != 'your-org/provisioner'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update install script with correct repo
+      run: |
+        REPO_OWNER="${{ github.repository_owner }}"
+        REPO_NAME="${{ github.event.repository.name }}"
+
+        sed -i "s/REPO_OWNER=\"your-org\"/REPO_OWNER=\"$REPO_OWNER\"/" install.sh
+        sed -i "s/REPO_NAME=\"provisioner\"/REPO_NAME=\"$REPO_NAME\"/" install.sh
+
+    - name: Commit updated install script
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add install.sh
+        git diff --staged --quiet || git commit -m "Update install script with correct repository"
+        git push

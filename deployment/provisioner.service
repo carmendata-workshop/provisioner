@@ -1,0 +1,41 @@
+[Unit]
+Description=OpenTofu Environment Provisioner
+Documentation=https://github.com/carmendata-workshop/provisioner
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=provisioner
+Group=provisioner
+WorkingDirectory=/var/lib/provisioner
+ExecStart=/opt/provisioner/provisioner
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=provisioner
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/provisioner /var/log/provisioner /etc/provisioner
+ReadOnlyPaths=/etc/provisioner
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=32768
+
+# Environment
+Environment=HOME=/var/lib/provisioner
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PROVISIONER_CONFIG_DIR=/etc/provisioner
+Environment=PROVISIONER_STATE_DIR=/var/lib/provisioner
+Environment=PROVISIONER_LOG_DIR=/var/log/provisioner
+
+[Install]
+WantedBy=multi-user.target

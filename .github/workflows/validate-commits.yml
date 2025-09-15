@@ -1,0 +1,125 @@
+name: Validate Commits
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-commits:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Validate commit messages
+      run: |
+        echo "🔍 Validating commit messages..."
+
+        # Get commits in this PR
+        COMMITS=$(git log --oneline --pretty=format:"%s" origin/main..HEAD)
+
+        if [ -z "$COMMITS" ]; then
+          echo "✅ No commits to validate"
+          exit 0
+        fi
+
+        VALID=true
+
+        # Conventional commit pattern
+        PATTERN="^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)(\(.+\))?(!)?: .+"
+
+        echo "📋 Checking commits:"
+        while IFS= read -r commit; do
+          echo "  Checking: $commit"
+
+          if [[ "$commit" =~ $PATTERN ]]; then
+            echo "  ✅ Valid conventional commit"
+          elif [[ "$commit" =~ ^(feat!|fix!|perf!):.+ ]] || [[ "$commit" =~ BREAKING\ CHANGE ]]; then
+            echo "  ✅ Valid breaking change commit"
+          elif [[ "$commit" =~ ^Merge.*branch.* ]]; then
+            echo "  ✅ Merge commit (skipped)"
+          else
+            echo "  ❌ Invalid commit message format"
+            echo "     Expected: type(scope): description"
+            echo "     Example: feat: add new environment scheduler"
+            VALID=false
+          fi
+        done <<< "$COMMITS"
+
+        if [ "$VALID" = false ]; then
+          echo ""
+          echo "❌ Some commits don't follow conventional commit format"
+          echo ""
+          echo "📖 Conventional Commit Format:"
+          echo "   type(scope): description"
+          echo ""
+          echo "📝 Valid types:"
+          echo "   feat:     New feature"
+          echo "   fix:      Bug fix"
+          echo "   docs:     Documentation"
+          echo "   style:    Code style changes"
+          echo "   refactor: Code refactoring"
+          echo "   perf:     Performance improvements"
+          echo "   test:     Tests"
+          echo "   chore:    Maintenance"
+          echo "   ci:       CI/CD changes"
+          echo "   build:    Build system changes"
+          echo ""
+          echo "💥 Breaking changes:"
+          echo "   feat!: description (breaking feature)"
+          echo "   fix!: description (breaking fix)"
+          echo "   Or include 'BREAKING CHANGE:' in commit body"
+          echo ""
+          echo "📚 More info: https://www.conventionalcommits.org/"
+          exit 1
+        fi
+
+        echo "✅ All commits follow conventional commit format"
+
+    - name: Preview version bump
+      run: |
+        echo "🔮 Calculating version impact..."
+
+        # Create temp script
+        cat > /tmp/version_preview.sh << 'EOF'
+        #!/bin/bash
+        LAST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        COMMITS=$(git log --oneline --pretty=format:"%s" origin/main..HEAD)
+
+        if [ -z "$COMMITS" ]; then
+          echo "No version change (no commits)"
+          exit 0
+        fi
+
+        BUMP_MAJOR=false
+        BUMP_MINOR=false
+        BUMP_PATCH=false
+
+        while IFS= read -r commit; do
+          if [[ "$commit" =~ ^feat!:|^fix!:|^perf!: ]] || [[ "$commit" =~ BREAKING\ CHANGE ]]; then
+            BUMP_MAJOR=true
+          elif [[ "$commit" =~ ^feat(\([^)]*\))?:\ ]]; then
+            BUMP_MINOR=true
+          elif [[ "$commit" =~ ^fix(\([^)]*\))?:\ ]]; then
+            BUMP_PATCH=true
+          elif [[ "$commit" =~ ^perf(\([^)]*\))?:\ ]]; then
+            BUMP_PATCH=true
+          fi
+        done <<< "$COMMITS"
+
+        if [ "$BUMP_MAJOR" = true ]; then
+          echo "🚀 This PR will trigger a MAJOR version bump"
+        elif [ "$BUMP_MINOR" = true ]; then
+          echo "🚀 This PR will trigger a MINOR version bump"
+        elif [ "$BUMP_PATCH" = true ]; then
+          echo "🚀 This PR will trigger a PATCH version bump"
+        else
+          echo "📝 This PR will NOT trigger a version bump"
+        fi
+
+        echo "Current version: $LAST_VERSION"
+        EOF
+
+        chmod +x /tmp/version_preview.sh
+        /tmp/version_preview.sh

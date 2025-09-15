@@ -1,0 +1,171 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# Build artifacts
+/bin/
+/dist/
+*.tar.gz
+*.zip
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test coverage
+coverage.out
+coverage.html
+*.cover
+*.coverprofile
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Log files
+*.log
+logs/
+*.logs
+
+# State and data files (for development)
+state/
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Configuration files with secrets
+config.local.json
+*-local.json
+*.local.yml
+*.local.yaml
+
+# OpenTofu/Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate.d/
+crash.log
+crash.*.log
+
+# Vagrant
+.vagrant/
+
+# Docker
+.dockerignore
+
+# Node.js (if any JS tooling is added)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if any Python tooling is added)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.python-version
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Local development files
+local/
+dev/
+debug/
+*.local
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Archive files
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.rar
+*.7z
+
+# Generated documentation
+docs/_build/
+site/
+
+# Cache directories
+.cache/
+.npm/
+.yarn/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Application specific
+# Add any app-specific files here

@@ -1,0 +1,7 @@
+{
+  "name": "everest",
+  "enabled": true,
+  "deploy_schedule": "*/2 * * * *",
+  "destroy_schedule": "*/5 * * * *",
+  "description": "Test environment for OpenTofu scheduler"
+}
