@@ -53,13 +53,13 @@ install: build
 	@echo "Installing ${BINARY_NAME}..."
 	sudo ./install.sh
 
-# Run tests
+# Run tests (CI-friendly: no coverage, fast feedback)
 .PHONY: test
 test:
 	@echo "Running tests..."
 	go test -v ./...
 
-# Run tests with coverage
+# Run tests with coverage (LOCAL DEVELOPMENT ONLY)
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage..."
@@ -173,8 +173,15 @@ help:
 .PHONY: dev
 dev: clean fmt lint test build
 
+# CI target: essential checks only (fast feedback)
 .PHONY: ci
-ci: clean fmt test-coverage build-all
+ci: clean fmt test lint build
+
+# Coverage for CI (separate, non-blocking)
+.PHONY: ci-coverage
+ci-coverage:
+	@echo "Generating coverage for CI..."
+	go test -v -coverprofile=coverage.out ./...
 
 # Quick development build and run
 .PHONY: run
