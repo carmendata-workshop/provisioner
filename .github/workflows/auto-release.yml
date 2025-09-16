@@ -131,13 +131,19 @@ jobs:
         GOARCH: ${{ matrix.goarch }}
         VERSION: ${{ needs.check-version.outputs.new-version }}
       run: |
-        make BINARY_NAME=provisioner-${{ matrix.os }}-${{ matrix.arch }} build
+        mkdir -p bin
+        CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags " \
+          -X environment-scheduler/pkg/version.Version=${{ needs.check-version.outputs.new-version }} \
+          -X environment-scheduler/pkg/version.GitCommit=$(git rev-parse --short HEAD) \
+          -X environment-scheduler/pkg/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+          -w -s" \
+          -o bin/provisioner-${{ matrix.os }}-${{ matrix.arch }} .
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: provisioner-${{ matrix.os }}-${{ matrix.arch }}
-        path: provisioner-${{ matrix.os }}-${{ matrix.arch }}
+        path: bin/provisioner-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     needs: [check-version, build]
@@ -159,8 +165,15 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git tag $NEW_VERSION
-        git push origin $NEW_VERSION
+
+        # Check if tag already exists
+        if git tag -l | grep -q "^$NEW_VERSION$"; then
+          echo "Tag $NEW_VERSION already exists, skipping tag creation"
+        else
+          echo "Creating tag $NEW_VERSION"
+          git tag $NEW_VERSION
+          git push origin $NEW_VERSION
+        fi
 
     - name: Create Release
       id: create_release
@@ -187,9 +200,16 @@ jobs:
 
     - name: Upload Release Assets
       run: |
-        for file in provisioner-*/provisioner-*; do
-          echo "Uploading $file"
-          gh release upload ${{ needs.check-version.outputs.new-version }} "$file"
+        echo "Available files:"
+        ls -la
+        echo "Looking for provisioner binaries:"
+        find . -name "provisioner-*" -type f
+
+        for file in provisioner-*; do
+          if [ -f "$file" ]; then
+            echo "Uploading $file"
+            gh release upload ${{ needs.check-version.outputs.new-version }} "$file"
+          fi
         done
 
         # Upload service file
