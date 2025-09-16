@@ -134,7 +134,7 @@ jobs:
         make BINARY_NAME=provisioner-${{ matrix.os }}-${{ matrix.arch }} build
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: provisioner-${{ matrix.os }}-${{ matrix.arch }}
         path: provisioner-${{ matrix.os }}-${{ matrix.arch }}
@@ -149,7 +149,9 @@ jobs:
         ref: ${{ github.event.workflow_run.head_sha }}
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
 
     - name: Create and push tag
       env:
@@ -162,28 +164,26 @@ jobs:
 
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ needs.check-version.outputs.new-version }}
-        release_name: Release ${{ needs.check-version.outputs.new-version }}
-        draft: false
-        prerelease: false
-        body: |
-          ${{ needs.check-version.outputs.changelog }}
+      run: |
+        gh release create ${{ needs.check-version.outputs.new-version }} \
+          --title "Release ${{ needs.check-version.outputs.new-version }}" \
+          --notes-file - << 'EOF'
+        ${{ needs.check-version.outputs.changelog }}
 
           ## Installation
 
           **Quick install (Linux):**
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/install.sh | sudo bash
+          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/scripts/install.sh | sudo bash
           ```
 
           **Specific version:**
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/install.sh | sudo bash -s ${{ needs.check-version.outputs.new-version }}
+          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/scripts/install.sh | sudo bash -s ${{ needs.check-version.outputs.new-version }}
           ```
+        EOF
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload Release Assets
       run: |
