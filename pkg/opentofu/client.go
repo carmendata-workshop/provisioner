@@ -41,16 +41,16 @@ func New() (*Client, error) {
 
 	// Write binary data to file
 	if _, err := tmpFile.Write(binaryData); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 		return nil, fmt.Errorf("failed to write binary: %w", err)
 	}
 
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Make it executable
 	if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		return nil, fmt.Errorf("failed to make binary executable: %w", err)
 	}
 
@@ -103,7 +103,7 @@ func (c *Client) Deploy(environmentPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create working directory: %w", err)
 	}
-	defer os.RemoveAll(workingDir)
+	defer func() { _ = os.RemoveAll(workingDir) }()
 
 	// Copy environment files to working directory
 	if err := copyDir(environmentPath, workingDir); err != nil {
@@ -132,7 +132,7 @@ func (c *Client) DestroyEnvironment(environmentPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create working directory: %w", err)
 	}
-	defer os.RemoveAll(workingDir)
+	defer func() { _ = os.RemoveAll(workingDir) }()
 
 	// Copy environment files to working directory
 	if err := copyDir(environmentPath, workingDir); err != nil {

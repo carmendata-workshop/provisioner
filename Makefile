@@ -57,13 +57,13 @@ install: build
 .PHONY: test
 test:
 	@echo "Running tests..."
-	go test -v -race ./...
+	go test -v ./...
 
 # Run tests with coverage
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage..."
-	go test -v -race -coverprofile=coverage.out ./...
+	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 

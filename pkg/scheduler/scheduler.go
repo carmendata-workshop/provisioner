@@ -166,7 +166,7 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 	log.Printf("Starting deployment of %s", envName)
 
 	s.state.SetEnvironmentStatus(envName, StatusDeploying)
-	s.SaveState()
+	_ = s.SaveState()
 
 	if err := s.client.Deploy(env.Path); err != nil {
 		log.Printf("Failed to deploy %s: %v", envName, err)
@@ -176,7 +176,7 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 		s.state.SetEnvironmentStatus(envName, StatusDeployed)
 	}
 
-	s.SaveState()
+	_ = s.SaveState()
 }
 
 func (s *Scheduler) destroyEnvironment(env environment.Environment) {
@@ -184,7 +184,7 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 	log.Printf("Starting destruction of %s", envName)
 
 	s.state.SetEnvironmentStatus(envName, StatusDestroying)
-	s.SaveState()
+	_ = s.SaveState()
 
 	if err := s.client.DestroyEnvironment(env.Path); err != nil {
 		log.Printf("Failed to destroy %s: %v", envName, err)
@@ -194,5 +194,5 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 		s.state.SetEnvironmentStatus(envName, StatusDestroyed)
 	}
 
-	s.SaveState()
+	_ = s.SaveState()
 }

@@ -18,7 +18,7 @@ func TestSchedulerDeployEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stateDir := filepath.Join(tempDir, "state")
 	envPath := filepath.Join(tempDir, "test-env")
@@ -79,7 +79,7 @@ func TestSchedulerDeployEnvironmentError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stateDir := filepath.Join(tempDir, "state")
 	envPath := filepath.Join(tempDir, "test-env")
@@ -118,7 +118,7 @@ func TestSchedulerDestroyEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stateDir := filepath.Join(tempDir, "state")
 	envPath := filepath.Join(tempDir, "test-env")
@@ -168,7 +168,7 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create mock client
 	mockClient := opentofu.NewMockTofuClient()
@@ -223,7 +223,7 @@ func TestSchedulerSkipsBusyEnvironments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	mockClient := opentofu.NewMockTofuClient()
 	scheduler := NewWithClient(mockClient)
@@ -265,7 +265,7 @@ func TestSchedulerLoadEnvironments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test environment
 	envDir := filepath.Join(tempDir, "test-env")
@@ -296,6 +296,7 @@ func TestSchedulerLoadEnvironments(t *testing.T) {
 	// For now, test that a scheduler can be created
 	if scheduler == nil {
 		t.Error("expected scheduler to be created")
+		return
 	}
 
 	if scheduler.statePath != "state/scheduler.json" {

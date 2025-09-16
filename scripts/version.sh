@@ -61,19 +61,19 @@ while IFS= read -r commit; do
         echo "    → 💥 BREAKING CHANGE detected" >&2
         BUMP_MAJOR=true
     # Check for features
-    elif [[ "$commit" =~ ^feat(\([^)]*\))?:\ ]]; then
+    elif [[ "$commit" =~ ^feat ]]; then
         echo "    → ✨ Feature detected" >&2
         BUMP_MINOR=true
     # Check for fixes
-    elif [[ "$commit" =~ ^fix(\([^)]*\))?:\ ]]; then
+    elif [[ "$commit" =~ ^fix ]]; then
         echo "    → 🐛 Fix detected" >&2
         BUMP_PATCH=true
     # Check for performance improvements
-    elif [[ "$commit" =~ ^perf(\([^)]*\))?:\ ]]; then
+    elif [[ "$commit" =~ ^perf ]]; then
         echo "    → ⚡ Performance improvement detected" >&2
         BUMP_PATCH=true
     # Other types don't bump version
-    elif [[ "$commit" =~ ^(docs|style|refactor|test|chore|ci|build)(\([^)]*\))?:\ ]]; then
+    elif [[ "$commit" =~ ^(docs|style|refactor|test|chore|ci|build) ]]; then
         echo "    → 📝 Non-version-bumping change" >&2
     else
         echo "    → ⚠️  Non-conventional commit (treating as patch)" >&2

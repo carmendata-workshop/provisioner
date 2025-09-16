@@ -13,7 +13,7 @@ func TestLoadEnvironments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test environment 1 (enabled)
 	env1Dir := filepath.Join(tempDir, "test-env-1")
@@ -93,7 +93,7 @@ func TestLoadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 
 	config := Config{
 		Name:            "test-config",
@@ -111,7 +111,7 @@ func TestLoadConfig(t *testing.T) {
 	if _, err := tempFile.Write(configData); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	// Load config
 	loadedConfig, err := loadConfig(tempFile.Name())
@@ -137,7 +137,7 @@ func TestEnvironmentHasMainTF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	env := Environment{
 		Path: tempDir,

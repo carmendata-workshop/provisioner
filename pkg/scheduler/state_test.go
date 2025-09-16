@@ -44,8 +44,8 @@ func TestSaveAndLoadState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	tempFile.Close()
-	defer os.Remove(tempFile.Name())
+	_ = tempFile.Close()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 
 	// Create state with test data
 	state := NewState()
@@ -167,7 +167,7 @@ func TestSaveStateCreatesDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create state file path in non-existent subdirectory
 	statePath := filepath.Join(tempDir, "subdir", "state.json")
