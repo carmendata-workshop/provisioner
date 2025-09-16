@@ -2,12 +2,12 @@ package opentofu
 
 // MockTofuClient is a mock implementation of TofuClient for testing
 type MockTofuClient struct {
-	DeployFunc          func(environmentPath string) error
-	DestroyFunc         func(environmentPath string) error
-	DeployCallCount     int
-	DestroyCallCount    int
-	DeployCallPaths     []string
-	DestroyCallPaths    []string
+	DeployFunc       func(environmentPath string) error
+	DestroyFunc      func(environmentPath string) error
+	DeployCallCount  int
+	DestroyCallCount int
+	DeployCallPaths  []string
+	DestroyCallPaths []string
 }
 
 // NewMockTofuClient creates a new mock client with default success behavior

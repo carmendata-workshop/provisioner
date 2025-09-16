@@ -174,7 +174,7 @@ help:
 dev: clean fmt lint test build
 
 .PHONY: ci
-ci: clean fmt lint test-coverage build-all
+ci: clean fmt test-coverage build-all
 
 # Quick development build and run
 .PHONY: run

@@ -61,6 +61,6 @@ jobs:
 
     - name: Test version flags
       run: |
-        ./provisioner --version
-        ./provisioner --version-full
-        ./provisioner --help
+        ./bin/provisioner --version
+        ./bin/provisioner --version-full
+        ./bin/provisioner --help
