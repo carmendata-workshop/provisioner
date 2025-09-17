@@ -13,6 +13,7 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 ## Features
 
 - **Enhanced CRON scheduling** - Supports ranges, lists, intervals, and mixed combinations
+- **Multiple schedule support** - Deploy/destroy environments at different times using arrays of CRON expressions
 - **Multiple environments** - Manage multiple environments simultaneously
 - **State persistence** - Environment status survives application restarts
 - **Configuration hot-reload** - Automatically detects changes to config files and templates
@@ -108,12 +109,30 @@ Each environment requires two files in `environments/{name}/`:
 }
 ```
 
+**Multiple Schedule Support:**
+Both `deploy_schedule` and `destroy_schedule` can accept either a single CRON expression (string) or multiple CRON expressions (array):
+
+```json
+{
+  "name": "multi-schedule-env",
+  "enabled": true,
+  "deploy_schedule": ["0 7 * * 1,3,5", "0 8 * * 2,4"],
+  "destroy_schedule": "30 17 * * 1-5",
+  "description": "Multiple deploy schedules, single destroy schedule"
+}
+```
+
 **Field descriptions:**
 - `name` - Environment identifier (must match directory name)
 - `enabled` - Whether environment should be processed by scheduler
-- `deploy_schedule` - CRON expression for deployment times
-- `destroy_schedule` - CRON expression for destruction times
+- `deploy_schedule` - CRON expression(s) for deployment times (string or array of strings)
+- `destroy_schedule` - CRON expression(s) for destruction times (string or array of strings)
 - `description` - Human-readable description
+
+**Schedule Behavior:**
+- **Single schedule**: Environment deploys/destroys at the specified time
+- **Multiple schedules**: Environment deploys/destroys when ANY of the schedules match
+- **Mixed formats**: Can mix single and multiple schedules (e.g., multiple deploy schedules with single destroy schedule)
 
 ### main.tf
 Standard OpenTofu/Terraform configuration file with your infrastructure definition.
@@ -241,6 +260,28 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
   "deploy_schedule": "30 8 * * 2,4",
   "destroy_schedule": "30 16 * * 2,4",
   "description": "Training environment - Tue/Thu 8:30am-4:30pm"
+}
+```
+
+### Multiple Deploy Schedules (Different Times for Different Days)
+```json
+{
+  "name": "annapurna",
+  "enabled": true,
+  "deploy_schedule": ["0 7 * * 1,3,5", "0 8 * * 2,4"],
+  "destroy_schedule": "30 17 * * 1-5",
+  "description": "Earlier start Mon/Wed/Fri (7am), later start Tue/Thu (8am)"
+}
+```
+
+### Testing Environment (Multiple Daily Cycles)
+```json
+{
+  "name": "matterhorn",
+  "enabled": true,
+  "deploy_schedule": ["0 6 * * 1-5", "0 14 * * 1-5"],
+  "destroy_schedule": ["0 12 * * 1-5", "0 18 * * 1-5"],
+  "description": "Twice daily - 6am-12pm and 2pm-6pm on weekdays"
 }
 ```
 

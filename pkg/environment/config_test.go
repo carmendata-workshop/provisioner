@@ -177,3 +177,177 @@ func TestEnvironmentHasMainTF(t *testing.T) {
 		t.Errorf("expected main.tf path '%s', got '%s'", expectedPath, env.GetMainTFPath())
 	}
 }
+
+func TestConfigMultipleSchedules(t *testing.T) {
+	tests := []struct {
+		name           string
+		config         Config
+		expectedDeploy []string
+		expectError    bool
+	}{
+		{
+			name: "single string schedule",
+			config: Config{
+				DeploySchedule:  "0 9 * * 1-5",
+				DestroySchedule: "0 17 * * 1-5",
+			},
+			expectedDeploy: []string{"0 9 * * 1-5"},
+			expectError:    false,
+		},
+		{
+			name: "multiple string schedules",
+			config: Config{
+				DeploySchedule:  []string{"0 7 * * 1,3,5", "0 8 * * 2,4"},
+				DestroySchedule: "0 17 * * 1-5",
+			},
+			expectedDeploy: []string{"0 7 * * 1,3,5", "0 8 * * 2,4"},
+			expectError:    false,
+		},
+		{
+			name: "mixed interface array",
+			config: Config{
+				DeploySchedule:  []interface{}{"0 6 * * 1-5", "0 14 * * 1-5"},
+				DestroySchedule: "0 18 * * 1-5",
+			},
+			expectedDeploy: []string{"0 6 * * 1-5", "0 14 * * 1-5"},
+			expectError:    false,
+		},
+		{
+			name: "invalid type in array",
+			config: Config{
+				DeploySchedule:  []interface{}{"0 9 * * 1-5", 123},
+				DestroySchedule: "0 17 * * 1-5",
+			},
+			expectedDeploy: nil,
+			expectError:    true,
+		},
+		{
+			name: "invalid type for schedule",
+			config: Config{
+				DeploySchedule:  123,
+				DestroySchedule: "0 17 * * 1-5",
+			},
+			expectedDeploy: nil,
+			expectError:    true,
+		},
+		{
+			name: "nil schedule",
+			config: Config{
+				DeploySchedule:  nil,
+				DestroySchedule: "0 17 * * 1-5",
+			},
+			expectedDeploy: nil,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deploySchedules, err := tt.config.GetDeploySchedules()
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(deploySchedules) != len(tt.expectedDeploy) {
+				t.Errorf("expected %d schedules, got %d", len(tt.expectedDeploy), len(deploySchedules))
+				return
+			}
+
+			for i, expected := range tt.expectedDeploy {
+				if deploySchedules[i] != expected {
+					t.Errorf("expected schedule[%d] = '%s', got '%s'", i, expected, deploySchedules[i])
+				}
+			}
+		})
+	}
+}
+
+func TestConfigJSONSerialization(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData string
+		expected Config
+	}{
+		{
+			name: "single schedule strings",
+			jsonData: `{
+				"name": "test",
+				"enabled": true,
+				"deploy_schedule": "0 9 * * 1-5",
+				"destroy_schedule": "0 17 * * 1-5",
+				"description": "test env"
+			}`,
+			expected: Config{
+				Name:            "test",
+				Enabled:         true,
+				DeploySchedule:  "0 9 * * 1-5",
+				DestroySchedule: "0 17 * * 1-5",
+				Description:     "test env",
+			},
+		},
+		{
+			name: "multiple deploy schedules",
+			jsonData: `{
+				"name": "test",
+				"enabled": true,
+				"deploy_schedule": ["0 7 * * 1,3,5", "0 8 * * 2,4"],
+				"destroy_schedule": "0 17 * * 1-5",
+				"description": "test env"
+			}`,
+			expected: Config{
+				Name:            "test",
+				Enabled:         true,
+				DeploySchedule:  []interface{}{"0 7 * * 1,3,5", "0 8 * * 2,4"},
+				DestroySchedule: "0 17 * * 1-5",
+				Description:     "test env",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.jsonData), &config)
+			if err != nil {
+				t.Fatalf("failed to unmarshal JSON: %v", err)
+			}
+
+			if config.Name != tt.expected.Name {
+				t.Errorf("expected name '%s', got '%s'", tt.expected.Name, config.Name)
+			}
+			if config.Enabled != tt.expected.Enabled {
+				t.Errorf("expected enabled %v, got %v", tt.expected.Enabled, config.Enabled)
+			}
+
+			// Test that the schedules can be processed
+			deploySchedules, err := config.GetDeploySchedules()
+			if err != nil {
+				t.Errorf("failed to get deploy schedules: %v", err)
+			}
+
+			destroySchedules, err := config.GetDestroySchedules()
+			if err != nil {
+				t.Errorf("failed to get destroy schedules: %v", err)
+			}
+
+			// For the multiple schedule case
+			if tt.name == "multiple deploy schedules" {
+				if len(deploySchedules) != 2 {
+					t.Errorf("expected 2 deploy schedules, got %d", len(deploySchedules))
+				}
+				if len(destroySchedules) != 1 {
+					t.Errorf("expected 1 destroy schedule, got %d", len(destroySchedules))
+				}
+			}
+		})
+	}
+}

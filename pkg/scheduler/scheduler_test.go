@@ -303,3 +303,135 @@ func TestSchedulerLoadEnvironments(t *testing.T) {
 		t.Errorf("expected default state path, got %s", scheduler.statePath)
 	}
 }
+
+func TestSchedulerShouldRunAnySchedule(t *testing.T) {
+	scheduler := New()
+
+	// Test time: Monday 9:00 AM
+	testTime := time.Date(2024, 6, 17, 9, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		schedules []string
+		expected  bool
+	}{
+		{
+			name:      "single matching schedule",
+			schedules: []string{"0 9 * * 1"},
+			expected:  true,
+		},
+		{
+			name:      "multiple schedules, first matches",
+			schedules: []string{"0 9 * * 1", "0 10 * * 1"},
+			expected:  true,
+		},
+		{
+			name:      "multiple schedules, second matches",
+			schedules: []string{"0 8 * * 1", "0 9 * * 1"},
+			expected:  true,
+		},
+		{
+			name:      "multiple schedules, none match",
+			schedules: []string{"0 8 * * 1", "0 10 * * 1"},
+			expected:  false,
+		},
+		{
+			name:      "empty schedule list",
+			schedules: []string{},
+			expected:  false,
+		},
+		{
+			name:      "invalid schedule in list",
+			schedules: []string{"invalid", "0 9 * * 1"},
+			expected:  true, // Should still match the valid one
+		},
+		{
+			name:      "all invalid schedules",
+			schedules: []string{"invalid1", "invalid2"},
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := scheduler.shouldRunAnySchedule(tt.schedules, testTime)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestSchedulerMultipleDeploySchedules(t *testing.T) {
+	// Create temp directory for test
+	tempDir, err := os.MkdirTemp("", "scheduler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Create mock opentofu client
+	mockClient := opentofu.NewMockTofuClient()
+
+	// Create scheduler with mock
+	scheduler := NewWithClient(mockClient)
+
+	// Initialize state properly
+	scheduler.state = NewState()
+
+	// Add test environment with multiple deploy schedules
+	testEnv := environment.Environment{
+		Config: environment.Config{
+			Name:            "test-env",
+			Enabled:         true,
+			DeploySchedule:  []string{"0 9 * * 1", "0 14 * * 1"}, // Monday 9am and 2pm
+			DestroySchedule: "0 17 * * 1",                        // Monday 5pm
+			Description:     "Test environment with multiple deploy schedules",
+		},
+		Path: tempDir,
+	}
+	scheduler.environments = []environment.Environment{testEnv}
+
+	// Test Monday 9:00 AM - should trigger deploy
+	mondayAM := time.Date(2024, 6, 17, 9, 0, 0, 0, time.UTC)
+	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayAM)
+
+	// Wait for goroutine to complete
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify deployment was attempted
+	if mockClient.DeployCallCount != 1 {
+		t.Errorf("expected 1 deploy call for Monday 9am schedule, got %d", mockClient.DeployCallCount)
+	}
+
+	// Reset mock
+	mockClient.Reset()
+
+	// Test Monday 2:00 PM - should trigger deploy again
+	mondayPM := time.Date(2024, 6, 17, 14, 0, 0, 0, time.UTC)
+	// Reset environment state to allow deployment
+	scheduler.state.SetEnvironmentStatus("test-env", StatusDestroyed)
+	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayPM)
+
+	// Wait for goroutine to complete
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify deployment was attempted again
+	if mockClient.DeployCallCount != 1 {
+		t.Errorf("expected 1 deploy call for Monday 2pm schedule, got %d", mockClient.DeployCallCount)
+	}
+
+	// Test Monday 10:00 AM - should NOT trigger deploy (no schedule)
+	mockClient.Reset()
+	mondayMid := time.Date(2024, 6, 17, 10, 0, 0, 0, time.UTC)
+	scheduler.state.SetEnvironmentStatus("test-env", StatusDestroyed)
+	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayMid)
+
+	// Wait for potential goroutine (shouldn't happen)
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify deployment was NOT attempted
+	if mockClient.DeployCallCount != 0 {
+		t.Errorf("expected 0 deploy calls for Monday 10am (no matching schedule), got %d", mockClient.DeployCallCount)
+	}
+}

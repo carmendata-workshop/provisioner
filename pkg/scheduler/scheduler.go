@@ -181,23 +181,38 @@ func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now t
 		return
 	}
 
-	// Check deploy schedule
-	deploySchedule, err := ParseCron(env.Config.DeploySchedule)
+	// Check deploy schedules
+	deploySchedules, err := env.Config.GetDeploySchedules()
 	if err != nil {
 		log.Printf("Invalid deploy schedule for %s: %v", env.Config.Name, err)
-	} else if deploySchedule.ShouldRun(now) && envState.Status != StatusDeployed {
+	} else if s.shouldRunAnySchedule(deploySchedules, now) && envState.Status != StatusDeployed {
 		log.Printf("Deploying environment %s", env.Config.Name)
 		go s.deployEnvironment(env)
 	}
 
-	// Check destroy schedule
-	destroySchedule, err := ParseCron(env.Config.DestroySchedule)
+	// Check destroy schedules
+	destroySchedules, err := env.Config.GetDestroySchedules()
 	if err != nil {
 		log.Printf("Invalid destroy schedule for %s: %v", env.Config.Name, err)
-	} else if destroySchedule.ShouldRun(now) && envState.Status != StatusDestroyed {
+	} else if s.shouldRunAnySchedule(destroySchedules, now) && envState.Status != StatusDestroyed {
 		log.Printf("Destroying environment %s", env.Config.Name)
 		go s.destroyEnvironment(env)
 	}
+}
+
+// shouldRunAnySchedule checks if any of the provided schedules should run at the given time
+func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool {
+	for _, scheduleStr := range schedules {
+		schedule, err := ParseCron(scheduleStr)
+		if err != nil {
+			log.Printf("Failed to parse schedule '%s': %v", scheduleStr, err)
+			continue
+		}
+		if schedule.ShouldRun(now) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Scheduler) deployEnvironment(env environment.Environment) {

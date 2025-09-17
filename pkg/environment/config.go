@@ -8,11 +8,11 @@ import (
 )
 
 type Config struct {
-	Name            string `json:"name"`
-	Enabled         bool   `json:"enabled"`
-	DeploySchedule  string `json:"deploy_schedule"`
-	DestroySchedule string `json:"destroy_schedule"`
-	Description     string `json:"description"`
+	Name            string      `json:"name"`
+	Enabled         bool        `json:"enabled"`
+	DeploySchedule  interface{} `json:"deploy_schedule"`
+	DestroySchedule interface{} `json:"destroy_schedule"`
+	Description     string      `json:"description"`
 }
 
 type Environment struct {
@@ -79,4 +79,40 @@ func (e *Environment) GetMainTFPath() string {
 func (e *Environment) HasMainTF() bool {
 	_, err := os.Stat(e.GetMainTFPath())
 	return err == nil
+}
+
+// GetDeploySchedules returns deploy schedules as a slice, handling both string and []string formats
+func (c *Config) GetDeploySchedules() ([]string, error) {
+	return normalizeScheduleField(c.DeploySchedule)
+}
+
+// GetDestroySchedules returns destroy schedules as a slice, handling both string and []string formats
+func (c *Config) GetDestroySchedules() ([]string, error) {
+	return normalizeScheduleField(c.DestroySchedule)
+}
+
+// normalizeScheduleField converts interface{} schedule field to []string
+func normalizeScheduleField(field interface{}) ([]string, error) {
+	if field == nil {
+		return nil, fmt.Errorf("schedule field is nil")
+	}
+
+	switch v := field.(type) {
+	case string:
+		return []string{v}, nil
+	case []interface{}:
+		schedules := make([]string, len(v))
+		for i, item := range v {
+			if str, ok := item.(string); ok {
+				schedules[i] = str
+			} else {
+				return nil, fmt.Errorf("schedule array must contain strings, got %T at index %d", item, i)
+			}
+		}
+		return schedules, nil
+	case []string:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("schedule must be string or array of strings, got %T", v)
+	}
 }

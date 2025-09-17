@@ -1,0 +1,7 @@
+{
+  "name": "annapurna",
+  "enabled": false,
+  "deploy_schedule": ["0 7 * * 1,3,5", "0 8 * * 2,4"],
+  "destroy_schedule": "30 17 * * 1-5",
+  "description": "Multiple schedule example - 7am Mon/Wed/Fri, 8am Tue/Thu (disabled by default)"
+}
