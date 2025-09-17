@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"environment-scheduler/pkg/scheduler"
-	"environment-scheduler/pkg/version"
+	"provisioner/pkg/scheduler"
+	"provisioner/pkg/version"
 )
 
 func main() {

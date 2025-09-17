@@ -179,9 +179,9 @@ jobs:
       run: |
         mkdir -p bin
         CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags " \
-          -X environment-scheduler/pkg/version.Version=${{ needs.check-version.outputs.new-version }} \
-          -X environment-scheduler/pkg/version.GitCommit=$(git rev-parse --short HEAD) \
-          -X environment-scheduler/pkg/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+          -X provisioner/pkg/version.Version=${{ needs.check-version.outputs.new-version }} \
+          -X provisioner/pkg/version.GitCommit=$(git rev-parse --short HEAD) \
+          -X provisioner/pkg/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
           -w -s" \
           -o bin/provisioner-${{ matrix.os }}-${{ matrix.arch }} .
 

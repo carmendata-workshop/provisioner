@@ -8,9 +8,9 @@ GO_VERSION ?= $(shell go version | cut -d' ' -f3)
 
 # Build flags
 LDFLAGS = -ldflags "\
-	-X environment-scheduler/pkg/version.Version=${VERSION} \
-	-X environment-scheduler/pkg/version.GitCommit=${GIT_COMMIT} \
-	-X environment-scheduler/pkg/version.BuildDate=${BUILD_DATE} \
+	-X provisioner/pkg/version.Version=${VERSION} \
+	-X provisioner/pkg/version.GitCommit=${GIT_COMMIT} \
+	-X provisioner/pkg/version.BuildDate=${BUILD_DATE} \
 	-w -s"
 
 # Go build flags

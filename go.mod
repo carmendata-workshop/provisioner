@@ -1,15 +1,19 @@
-module environment-scheduler
+// OpenTofu Environment Provisioner
+// All indirect dependencies are from github.com/opentofu/tofudl
+// for secure OpenTofu binary management and cryptographic verification
+module provisioner
 
 go 1.25.1
 
+require github.com/opentofu/tofudl v0.0.1
+
 require (
-	github.com/ProtonMail/go-crypto v1.0.0 // indirect
+	github.com/ProtonMail/go-crypto v1.3.0 // indirect
 	github.com/ProtonMail/go-mime v0.0.0-20230322103455-7d82a3887f2f // indirect
-	github.com/ProtonMail/gopenpgp/v2 v2.7.5 // indirect
-	github.com/cloudflare/circl v1.3.9 // indirect
-	github.com/opentofu/tofudl v0.0.1 // indirect
+	github.com/ProtonMail/gopenpgp/v2 v2.9.0 // indirect
+	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 )

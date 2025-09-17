@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"environment-scheduler/pkg/environment"
-	"environment-scheduler/pkg/opentofu"
+	"provisioner/pkg/environment"
+	"provisioner/pkg/opentofu"
 )
 
 func TestSchedulerDeployEnvironment(t *testing.T) {
