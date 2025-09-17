@@ -258,7 +258,7 @@ func (s *Scheduler) hasConfigChanged() bool {
 	var hasChanged bool
 
 	// Walk through all environment directories
-	filepath.Walk(environmentsDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(environmentsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Continue on error
 		}
@@ -273,6 +273,10 @@ func (s *Scheduler) hasConfigChanged() bool {
 
 		return nil
 	})
+
+	if err != nil {
+		log.Printf("Error walking config directory: %v", err)
+	}
 
 	return hasChanged
 }
