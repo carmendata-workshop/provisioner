@@ -12,9 +12,10 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 
 ## Features
 
-- **CRON-based scheduling** - Use standard CRON expressions for flexible timing
+- **Enhanced CRON scheduling** - Supports ranges, lists, intervals, and mixed combinations
 - **Multiple environments** - Manage multiple environments simultaneously
 - **State persistence** - Environment status survives application restarts
+- **Configuration hot-reload** - Automatically detects changes to config files and templates
 - **Mountain-themed naming** - Environment names follow mountain theme (everest, kilimanjaro, etc.)
 - **Automatic OpenTofu management** - Downloads and manages OpenTofu binary automatically
 - **Comprehensive logging** - All operations and state changes are logged
@@ -140,11 +141,35 @@ The scheduler maintains state in `scheduler.json`:
 
 Uses standard 5-field CRON format: `minute hour day month day-of-week`
 
-**Examples:**
+**Field Values:**
+- `minute` - 0-59
+- `hour` - 0-23
+- `day` - 1-31
+- `month` - 1-12
+- `day-of-week` - 0-6 (Sunday=0)
+
+**Supported Syntax:**
+- `*` - Match all values
+- `5` - Specific value
+- `1-5` - Range of values
+- `1,3,5` - List of values
+- `*/5` - Every 5th value (intervals)
+- `1-3,5` - Mixed ranges and values
+- `1,3-5` - Mixed values and ranges
+- `1-2,4-5` - Multiple ranges
+
+**Basic Examples:**
 - `0 9 * * 1-5` - 9:00 AM, Monday through Friday
 - `*/15 * * * *` - Every 15 minutes
 - `0 */2 * * *` - Every 2 hours
 - `0 0 * * 0` - Midnight every Sunday
+
+**Advanced Examples:**
+- `0 9 * * 1,2,4,5` - 9:00 AM, Mon/Tue/Thu/Fri (excluding Wednesday)
+- `0 9-17 * * 1-5` - Every hour from 9am-5pm, weekdays
+- `30 8,12,17 * * 1-5` - 8:30am, 12:30pm, 5:30pm on weekdays
+- `0 */3 * * 1,3,5` - Every 3 hours on Mon/Wed/Fri
+- `15 9-17/2 * * 1-5` - 15 minutes past every 2nd hour 9am-5pm, weekdays
 
 ## Environment States
 
@@ -186,14 +211,36 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 }
 ```
 
-### Demo Environment (Weekly)
+### Demo Environment (Weekdays Excluding Wednesday)
 ```json
 {
   "name": "denali",
   "enabled": true,
-  "deploy_schedule": "0 8 * * 1",
-  "destroy_schedule": "0 17 * * 5",
-  "description": "Demo environment - Monday 8am to Friday 5pm"
+  "deploy_schedule": "0 9 * * 1,2,4,5",
+  "destroy_schedule": "30 17 * * 1,2,4,5",
+  "description": "Demo environment - Mon/Tue/Thu/Fri 9am-5:30pm (no Wednesday)"
+}
+```
+
+### Extended Hours Environment (Business Hours)
+```json
+{
+  "name": "mckinley",
+  "enabled": true,
+  "deploy_schedule": "0 7 * * 1-5",
+  "destroy_schedule": "0 19 * * 1-5",
+  "description": "Extended hours - weekdays 7am-7pm"
+}
+```
+
+### Training Environment (Tuesday/Thursday Only)
+```json
+{
+  "name": "k2",
+  "enabled": true,
+  "deploy_schedule": "30 8 * * 2,4",
+  "destroy_schedule": "30 16 * * 2,4",
+  "description": "Training environment - Tue/Thu 8:30am-4:30pm"
 }
 ```
 

@@ -8,11 +8,11 @@ import (
 )
 
 type CronSchedule struct {
-	Minute int
-	Hour   int
-	Day    int
-	Month  int
-	DOW    int // Day of week
+	Minute []int // Support ranges and lists
+	Hour   []int
+	Day    []int
+	Month  []int
+	DOW    []int // Day of week
 }
 
 func ParseCron(cronExpr string) (*CronSchedule, error) {
@@ -22,120 +22,139 @@ func ParseCron(cronExpr string) (*CronSchedule, error) {
 	}
 
 	schedule := &CronSchedule{}
+	var err error
 
-	// Parse minute
-	if fields[0] == "*" {
-		schedule.Minute = -1
-	} else if strings.HasPrefix(fields[0], "*/") {
-		// Handle */N format
-		interval, err := strconv.Atoi(fields[0][2:])
-		if err != nil {
-			return nil, fmt.Errorf("invalid minute interval: %s", fields[0])
-		}
-		schedule.Minute = -interval // Use negative to indicate interval
-	} else {
-		minute, err := strconv.Atoi(fields[0])
-		if err != nil {
-			return nil, fmt.Errorf("invalid minute: %s", fields[0])
-		}
-		if minute < 0 || minute > 59 {
-			return nil, fmt.Errorf("minute out of range: %d", minute)
-		}
-		schedule.Minute = minute
+	// Parse minute (0-59)
+	schedule.Minute, err = parseField(fields[0], 0, 59)
+	if err != nil {
+		return nil, fmt.Errorf("invalid minute field '%s': %w", fields[0], err)
 	}
 
-	// Parse hour
-	if fields[1] == "*" {
-		schedule.Hour = -1
-	} else {
-		hour, err := strconv.Atoi(fields[1])
-		if err != nil {
-			return nil, fmt.Errorf("invalid hour: %s", fields[1])
-		}
-		if hour < 0 || hour > 23 {
-			return nil, fmt.Errorf("hour out of range: %d", hour)
-		}
-		schedule.Hour = hour
+	// Parse hour (0-23)
+	schedule.Hour, err = parseField(fields[1], 0, 23)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hour field '%s': %w", fields[1], err)
 	}
 
-	// Parse day
-	if fields[2] == "*" {
-		schedule.Day = -1
-	} else {
-		day, err := strconv.Atoi(fields[2])
-		if err != nil {
-			return nil, fmt.Errorf("invalid day: %s", fields[2])
-		}
-		if day < 1 || day > 31 {
-			return nil, fmt.Errorf("day out of range: %d", day)
-		}
-		schedule.Day = day
+	// Parse day (1-31)
+	schedule.Day, err = parseField(fields[2], 1, 31)
+	if err != nil {
+		return nil, fmt.Errorf("invalid day field '%s': %w", fields[2], err)
 	}
 
-	// Parse month
-	if fields[3] == "*" {
-		schedule.Month = -1
-	} else {
-		month, err := strconv.Atoi(fields[3])
-		if err != nil {
-			return nil, fmt.Errorf("invalid month: %s", fields[3])
-		}
-		if month < 1 || month > 12 {
-			return nil, fmt.Errorf("month out of range: %d", month)
-		}
-		schedule.Month = month
+	// Parse month (1-12)
+	schedule.Month, err = parseField(fields[3], 1, 12)
+	if err != nil {
+		return nil, fmt.Errorf("invalid month field '%s': %w", fields[3], err)
 	}
 
-	// Parse day of week
-	if fields[4] == "*" {
-		schedule.DOW = -1
-	} else {
-		dow, err := strconv.Atoi(fields[4])
-		if err != nil {
-			return nil, fmt.Errorf("invalid day of week: %s", fields[4])
-		}
-		if dow < 0 || dow > 6 {
-			return nil, fmt.Errorf("day of week out of range: %d", dow)
-		}
-		schedule.DOW = dow
+	// Parse day of week (0-6, Sunday=0)
+	schedule.DOW, err = parseField(fields[4], 0, 6)
+	if err != nil {
+		return nil, fmt.Errorf("invalid day of week field '%s': %w", fields[4], err)
 	}
 
 	return schedule, nil
 }
 
-func (c *CronSchedule) ShouldRun(now time.Time) bool {
-	// Check minute
-	if c.Minute >= 0 {
-		if now.Minute() != c.Minute {
-			return false
-		}
-	} else if c.Minute < -1 {
-		// Handle interval format (*/N)
-		interval := -c.Minute
-		if now.Minute()%interval != 0 {
-			return false
+// parseField parses a CRON field supporting *, ranges (1-5), lists (1,3,5), and intervals (*/2)
+func parseField(field string, min, max int) ([]int, error) {
+	if field == "*" {
+		// Return nil to indicate "match all"
+		return nil, nil
+	}
+
+	var values []int
+
+	// Handle comma-separated lists (1,3,5)
+	parts := strings.Split(field, ",")
+	for _, part := range parts {
+		if strings.HasPrefix(part, "*/") {
+			// Handle intervals (*/2)
+			interval, err := strconv.Atoi(part[2:])
+			if err != nil {
+				return nil, fmt.Errorf("invalid interval: %s", part)
+			}
+			if interval <= 0 {
+				return nil, fmt.Errorf("interval must be positive: %d", interval)
+			}
+			for i := min; i <= max; i += interval {
+				values = append(values, i)
+			}
+		} else if strings.Contains(part, "-") {
+			// Handle ranges (1-5)
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) != 2 {
+				return nil, fmt.Errorf("invalid range format: %s", part)
+			}
+			start, err := strconv.Atoi(rangeParts[0])
+			if err != nil {
+				return nil, fmt.Errorf("invalid range start: %s", rangeParts[0])
+			}
+			end, err := strconv.Atoi(rangeParts[1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid range end: %s", rangeParts[1])
+			}
+			if start < min || start > max || end < min || end > max {
+				return nil, fmt.Errorf("range values out of bounds [%d-%d]: %d-%d", min, max, start, end)
+			}
+			if start > end {
+				return nil, fmt.Errorf("invalid range: start > end: %d-%d", start, end)
+			}
+			for i := start; i <= end; i++ {
+				values = append(values, i)
+			}
+		} else {
+			// Handle single values
+			value, err := strconv.Atoi(part)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value: %s", part)
+			}
+			if value < min || value > max {
+				return nil, fmt.Errorf("value out of range [%d-%d]: %d", min, max, value)
+			}
+			values = append(values, value)
 		}
 	}
 
+	return values, nil
+}
+
+func (c *CronSchedule) ShouldRun(now time.Time) bool {
+	// Check minute
+	if c.Minute != nil && !contains(c.Minute, now.Minute()) {
+		return false
+	}
+
 	// Check hour
-	if c.Hour >= 0 && now.Hour() != c.Hour {
+	if c.Hour != nil && !contains(c.Hour, now.Hour()) {
 		return false
 	}
 
 	// Check day
-	if c.Day >= 0 && now.Day() != c.Day {
+	if c.Day != nil && !contains(c.Day, now.Day()) {
 		return false
 	}
 
 	// Check month
-	if c.Month >= 0 && int(now.Month()) != c.Month {
+	if c.Month != nil && !contains(c.Month, int(now.Month())) {
 		return false
 	}
 
 	// Check day of week
-	if c.DOW >= 0 && int(now.Weekday()) != c.DOW {
+	if c.DOW != nil && !contains(c.DOW, int(now.Weekday())) {
 		return false
 	}
 
 	return true
+}
+
+// contains checks if a slice contains a specific value
+func contains(slice []int, value int) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }
