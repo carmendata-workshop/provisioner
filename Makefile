@@ -21,7 +21,13 @@ PLATFORMS = linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64
 
 # Default target
 .PHONY: all
-all: clean build
+all: clean build-install build
+
+# Generate install script from templates
+.PHONY: build-install
+build-install:
+	@echo "Generating install script from templates..."
+	./scripts/build-install.sh
 
 # Build the binary
 .PHONY: build
@@ -153,6 +159,7 @@ validate-commits:
 .PHONY: help
 help:
 	@echo "Available targets:"
+	@echo "  build-install  - Generate install script from templates"
 	@echo "  build          - Build the binary"
 	@echo "  build-dev      - Build with race detection for development"
 	@echo "  build-all      - Cross-compile for all platforms"
@@ -175,7 +182,7 @@ dev: clean fmt lint test build
 
 # CI target: essential checks only (fast feedback)
 .PHONY: ci
-ci: clean fmt test lint build
+ci: clean fmt test lint build-install build
 
 # Coverage for CI (separate, non-blocking)
 .PHONY: ci-coverage

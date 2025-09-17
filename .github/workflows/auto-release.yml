@@ -7,6 +7,17 @@ on:
       - completed
     branches: [ main ]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Specific version to release (overrides auto-detection)'
+        required: false
+        type: string
+      force_release:
+        description: 'Force release even if no version bump detected'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -15,7 +26,7 @@ permissions:
 jobs:
   check-version:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' }}
     outputs:
       should-release: ${{ steps.version.outputs.should-release }}
       new-version: ${{ steps.version.outputs.new-version }}
@@ -24,19 +35,28 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch full history for version calculation
-        ref: ${{ github.event.workflow_run.head_sha }}
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     - name: Calculate new version
       id: version
       run: |
         chmod +x scripts/version.sh
-        NEW_VERSION=$(./scripts/version.sh)
-        LAST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
+        # Check if manual version is provided
+        if [ -n "${{ inputs.version }}" ]; then
+          NEW_VERSION="${{ inputs.version }}"
+          echo "Using manual version: $NEW_VERSION"
+        else
+          NEW_VERSION=$(./scripts/version.sh)
+          echo "Auto-detected version: $NEW_VERSION"
+        fi
+
+        LAST_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
         echo "Last version: $LAST_VERSION"
         echo "New version: $NEW_VERSION"
 
-        if [ "$NEW_VERSION" != "$LAST_VERSION" ]; then
+        # Check if we should release
+        if [ "$NEW_VERSION" != "$LAST_VERSION" ] || [ "${{ inputs.force_release }}" = "true" ]; then
           echo "should-release=true" >> $GITHUB_OUTPUT
           echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Should create release: $NEW_VERSION"
@@ -44,6 +64,19 @@ jobs:
           echo "should-release=false" >> $GITHUB_OUTPUT
           echo "No version bump needed"
         fi
+
+    - name: Generate install script
+      if: steps.version.outputs.should-release == 'true'
+      run: |
+        chmod +x scripts/build-install.sh
+        make build-install
+
+    - name: Upload install script artifact
+      if: steps.version.outputs.should-release == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: install-script
+        path: scripts/install.sh
 
     - name: Generate changelog
       id: changelog
@@ -122,7 +155,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        ref: ${{ github.event.workflow_run.head_sha }}
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     - name: Set up Go
       uses: actions/setup-go@v6
@@ -143,7 +176,7 @@ jobs:
           -w -s" \
           -o bin/provisioner-${{ matrix.os }}-${{ matrix.arch }} .
 
-    - name: Upload artifacts
+    - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:
         name: provisioner-${{ matrix.os }}-${{ matrix.arch }}
@@ -156,7 +189,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.workflow_run.head_sha }}
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     - name: Download all artifacts
       uses: actions/download-artifact@v4
@@ -168,20 +201,20 @@ jobs:
       run: |
         gh release create ${{ needs.check-version.outputs.new-version }} \
           --title "Release ${{ needs.check-version.outputs.new-version }}" \
-          --target ${{ github.event.workflow_run.head_sha }} \
+          --target ${{ github.event.workflow_run.head_sha || github.sha }} \
           --notes-file - << 'EOF'
         ${{ needs.check-version.outputs.changelog }}
 
           ## Installation
 
-          **Quick install (Linux):**
+          **Quick install (Linux) - Latest:**
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/scripts/install.sh | sudo bash
+          curl -fsSL https://github.com/carmendata-workshop/provisioner/releases/latest/download/install.sh | sudo bash
           ```
 
-          **Specific version:**
+          **Specific version with version parameter:**
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/carmendata-workshop/provisioner/main/scripts/install.sh | sudo bash -s ${{ needs.check-version.outputs.new-version }}
+          curl -fsSL https://github.com/carmendata-workshop/provisioner/releases/${{ needs.check-version.outputs.new-version }}/download/install.sh | sudo bash
           ```
         EOF
       env:
@@ -201,7 +234,12 @@ jobs:
           fi
         done
 
-        # Upload service file
-        gh release upload ${{ needs.check-version.outputs.new-version }} deployment/provisioner.service
+        # Upload install script (downloaded from artifacts)
+        if [ -f "install.sh" ]; then
+          echo "Uploading install.sh"
+          gh release upload ${{ needs.check-version.outputs.new-version }} "install.sh"
+        else
+          echo "⚠️ install.sh not found in artifacts"
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

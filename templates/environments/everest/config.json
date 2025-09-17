@@ -1,0 +1,7 @@
+{
+  "name": "everest",
+  "enabled": false,
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "Example environment - weekdays 9am-6pm (disabled by default)"
+}

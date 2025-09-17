@@ -169,3 +169,6 @@ pids/
 
 # Application specific
 # Add any app-specific files here
+
+# Generated install script (build artifact, not source)
+scripts/install.sh
