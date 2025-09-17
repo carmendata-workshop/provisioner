@@ -70,28 +70,50 @@ mkdir -p "$CONFIG_DIR/environments"  # /etc/provisioner/environments - configs
 mkdir -p "$STATE_DIR"                # /var/lib/provisioner - state data
 mkdir -p "$LOG_DIR"                  # /var/log/provisioner - log files
 
+# Check if service is running and stop it for binary update
+SERVICE_WAS_RUNNING=false
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "🛑 Stopping existing service for update..."
+    if systemctl stop "$SERVICE_NAME"; then
+        SERVICE_WAS_RUNNING=true
+        echo "✅ Service stopped successfully"
+    else
+        echo "⚠️  Warning: Failed to stop service, but continuing with installation..."
+    fi
+fi
+
 # Install binary
 echo "📋 Installing binary..."
 if [ -f "bin/provisioner" ]; then
-    cp bin/provisioner "$INSTALL_DIR/"
+    if cp bin/provisioner "$INSTALL_DIR/"; then
+        echo "✅ Binary installed successfully"
+    else
+        echo "❌ Failed to copy binary from bin/provisioner"
+        exit 1
+    fi
 elif [ -f "provisioner" ]; then
-    cp provisioner "$INSTALL_DIR/"
+    if cp provisioner "$INSTALL_DIR/"; then
+        echo "✅ Binary installed successfully"
+    else
+        echo "❌ Failed to copy binary from provisioner"
+        exit 1
+    fi
 else
-    echo "❌ Binary not found. Run 'make build' first."
+    echo "❌ Binary not found. Expected 'provisioner' or 'bin/provisioner'"
     exit 1
 fi
 chmod +x "$INSTALL_DIR/provisioner"
 
 # Create example environment
 echo "📋 Creating example environment..."
-mkdir -p "$CONFIG_DIR/environments/everest"
+mkdir -p "$CONFIG_DIR/environments/example"
 
-cat > "$CONFIG_DIR/environments/everest/config.json" << 'EOF'
-{{EVEREST_CONFIG_JSON}}
+cat > "$CONFIG_DIR/environments/example/config.json" << 'EOF'
+{{EXAMPLE_CONFIG_JSON}}
 EOF
 
-cat > "$CONFIG_DIR/environments/everest/main.tf" << 'EOF'
-{{EVEREST_MAIN_TF}}
+cat > "$CONFIG_DIR/environments/example/main.tf" << 'EOF'
+{{EXAMPLE_MAIN_TF}}
 EOF
 
 # Set ownership and permissions
@@ -115,19 +137,32 @@ EOF
 systemctl daemon-reload
 
 # Enable and start service
-echo "🔄 Enabling and starting service..."
+echo "🔄 Enabling service..."
 systemctl enable "$SERVICE_NAME"
-systemctl start "$SERVICE_NAME"
+
+if [ "$SERVICE_WAS_RUNNING" = true ]; then
+    echo "🔄 Restarting service..."
+    systemctl start "$SERVICE_NAME"
+    echo "✅ Service updated and restarted"
+else
+    echo "🔄 Starting service..."
+    systemctl start "$SERVICE_NAME"
+    echo "✅ Service started"
+fi
 
 # Check service status
 echo "📊 Service status:"
 systemctl status "$SERVICE_NAME" --no-pager -l
 
 echo ""
-echo "✅ Installation complete!"
+if [ "$SERVICE_WAS_RUNNING" = true ]; then
+    echo "✅ Update complete! Service has been restarted with the new binary."
+else
+    echo "✅ Installation complete! Service has been started."
+fi
 echo ""
 echo "📁 Binary: $INSTALL_DIR/provisioner"
-echo "📝 Example environment created (disabled): $CONFIG_DIR/environments/everest/"
+echo "📝 Example environment created (disabled): $CONFIG_DIR/environments/example/"
 echo ""
 echo "Next steps:"
 echo "1. Review and configure environments in $CONFIG_DIR/environments/"

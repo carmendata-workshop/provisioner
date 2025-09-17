@@ -29,8 +29,8 @@ func TestSchedulerDeployEnvironment(t *testing.T) {
 	}
 
 	env := environment.Environment{
+		Name: "test-env",
 		Config: environment.Config{
-			Name:            "test-env",
 			Enabled:         true,
 			DeploySchedule:  "* * * * *",
 			DestroySchedule: "* * * * *",
@@ -85,7 +85,8 @@ func TestSchedulerDeployEnvironmentError(t *testing.T) {
 	envPath := filepath.Join(tempDir, "test-env")
 
 	env := environment.Environment{
-		Config: environment.Config{Name: "test-env"},
+		Name:   "test-env",
+		Config: environment.Config{},
 		Path:   envPath,
 	}
 
@@ -124,7 +125,8 @@ func TestSchedulerDestroyEnvironment(t *testing.T) {
 	envPath := filepath.Join(tempDir, "test-env")
 
 	env := environment.Environment{
-		Config: environment.Config{Name: "test-env"},
+		Name:   "test-env",
+		Config: environment.Config{},
 		Path:   envPath,
 	}
 
@@ -179,8 +181,8 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 
 	// Create test environment with schedules that should trigger
 	env := environment.Environment{
+		Name: "test-env",
 		Config: environment.Config{
-			Name:            "test-env",
 			Enabled:         true,
 			DeploySchedule:  "* * * * *", // Every minute
 			DestroySchedule: "* * * * *", // Every minute
@@ -230,8 +232,8 @@ func TestSchedulerSkipsBusyEnvironments(t *testing.T) {
 	scheduler.state = NewState()
 
 	env := environment.Environment{
+		Name: "test-env",
 		Config: environment.Config{
-			Name:            "test-env",
 			DeploySchedule:  "* * * * *",
 			DestroySchedule: "* * * * *",
 		},
@@ -274,7 +276,6 @@ func TestSchedulerLoadEnvironments(t *testing.T) {
 	}
 
 	config := environment.Config{
-		Name:            "test-env",
 		Enabled:         true,
 		DeploySchedule:  "0 9 * * *",
 		DestroySchedule: "0 17 * * *",
@@ -381,8 +382,8 @@ func TestSchedulerMultipleDeploySchedules(t *testing.T) {
 
 	// Add test environment with multiple deploy schedules
 	testEnv := environment.Environment{
+		Name: "test-env",
 		Config: environment.Config{
-			Name:            "test-env",
 			Enabled:         true,
 			DeploySchedule:  []string{"0 9 * * 1", "0 14 * * 1"}, // Monday 9am and 2pm
 			DestroySchedule: "0 17 * * 1",                        // Monday 5pm

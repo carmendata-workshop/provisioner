@@ -30,10 +30,10 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 
 2. **Create an environment:**
    ```bash
-   mkdir -p environments/everest
+   mkdir -p environments/example
    ```
 
-3. **Add OpenTofu template** (`environments/everest/main.tf`):
+3. **Add OpenTofu template** (`environments/example/main.tf`):
    ```hcl
    terraform {
      required_providers {
@@ -52,14 +52,14 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
    variable "environment_name" {
      description = "Name of the environment"
      type        = string
-     default     = "everest"
+     default     = "example"
    }
    ```
 
-4. **Add configuration** (`environments/everest/config.json`):
+4. **Add configuration** (`environments/example/config.json`):
    ```json
    {
-     "name": "everest",
+     "name": "example",
      "enabled": true,
      "deploy_schedule": "0 9 * * 1-5",
      "destroy_schedule": "0 18 * * 1-5",
@@ -86,7 +86,7 @@ provisioner/
 │   ├── opentofu/           # OpenTofu CLI wrapper
 │   └── logging/            # Logging utilities
 ├── environments/           # Environment templates
-│   └── everest/
+│   └── example/
 │       ├── main.tf         # OpenTofu template
 │       └── config.json     # Environment configuration
 ├── state/                  # State persistence
@@ -142,7 +142,7 @@ The scheduler maintains state in `scheduler.json`:
 ```json
 {
   "environments": {
-    "everest": {
+    "example": {
       "status": "deployed",
       "last_deployed": "2025-09-15T09:00:00Z",
       "last_destroyed": "2025-09-14T18:00:00Z",
@@ -415,7 +415,7 @@ When installed via the installer, files are organized according to the Linux Fil
 
 /etc/provisioner/              # Configuration files
 ├── environments/
-│   └── everest/
+│   └── example/
 │       ├── main.tf           # OpenTofu template
 │       └── config.json       # Environment configuration
 

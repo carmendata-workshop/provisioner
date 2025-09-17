@@ -18,8 +18,8 @@ fi
 
 # Read template files
 SYSTEMD_SERVICE=$(cat "$TEMPLATE_DIR/provisioner.service")
-EVEREST_CONFIG_JSON=$(cat "$TEMPLATE_DIR/environments/everest/config.json")
-EVEREST_MAIN_TF=$(cat "$TEMPLATE_DIR/environments/everest/main.tf")
+EXAMPLE_CONFIG_JSON=$(cat "$TEMPLATE_DIR/environments/simple-example/config.json")
+EXAMPLE_MAIN_TF=$(cat "$TEMPLATE_DIR/environments/simple-example/main.tf")
 
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
@@ -31,12 +31,12 @@ cp "$TEMPLATE_FILE" "$TEMP_FILE"
 
 # Replace placeholders using awk for better multi-line handling
 awk -v systemd_service="$SYSTEMD_SERVICE" \
-    -v everest_config="$EVEREST_CONFIG_JSON" \
-    -v everest_tf="$EVEREST_MAIN_TF" '
+    -v example_config="$EXAMPLE_CONFIG_JSON" \
+    -v example_tf="$EXAMPLE_MAIN_TF" '
 {
     gsub(/{{SYSTEMD_SERVICE}}/, systemd_service)
-    gsub(/{{EVEREST_CONFIG_JSON}}/, everest_config)
-    gsub(/{{EVEREST_MAIN_TF}}/, everest_tf)
+    gsub(/{{EXAMPLE_CONFIG_JSON}}/, example_config)
+    gsub(/{{EXAMPLE_MAIN_TF}}/, example_tf)
     print
 }' "$TEMP_FILE" > "$OUTPUT_FILE"
 
@@ -48,5 +48,5 @@ chmod +x "$OUTPUT_FILE"
 echo "✅ Generated: $OUTPUT_FILE"
 echo "📋 Template sources:"
 echo "  - Service: $TEMPLATE_DIR/provisioner.service"
-echo "  - Config: $TEMPLATE_DIR/environments/everest/config.json"
-echo "  - Terraform: $TEMPLATE_DIR/environments/everest/main.tf"
+echo "  - Config: $TEMPLATE_DIR/environments/simple-example/config.json"
+echo "  - Terraform: $TEMPLATE_DIR/environments/simple-example/main.tf"

@@ -8,7 +8,6 @@ import (
 )
 
 type Config struct {
-	Name            string      `json:"name"`
 	Enabled         bool        `json:"enabled"`
 	DeploySchedule  interface{} `json:"deploy_schedule"`
 	DestroySchedule interface{} `json:"destroy_schedule"`
@@ -16,6 +15,7 @@ type Config struct {
 }
 
 type Environment struct {
+	Name   string // Derived from folder name
 	Config Config
 	Path   string
 }
@@ -49,6 +49,7 @@ func LoadEnvironments(environmentsDir string) ([]Environment, error) {
 
 		// Load all environments (enabled check will be done during scheduling)
 		environments = append(environments, Environment{
+			Name:   entry.Name(), // Use folder name as environment name
 			Config: config,
 			Path:   envPath,
 		})

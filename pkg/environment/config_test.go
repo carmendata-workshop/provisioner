@@ -22,7 +22,6 @@ func TestLoadEnvironments(t *testing.T) {
 	}
 
 	config1 := Config{
-		Name:            "test-env-1",
 		Enabled:         true,
 		DeploySchedule:  "0 9 * * *",
 		DestroySchedule: "0 17 * * *",
@@ -45,7 +44,6 @@ func TestLoadEnvironments(t *testing.T) {
 	}
 
 	config2 := Config{
-		Name:            "test-env-2",
 		Enabled:         false,
 		DeploySchedule:  "0 9 * * *",
 		DestroySchedule: "0 17 * * *",
@@ -76,7 +74,7 @@ func TestLoadEnvironments(t *testing.T) {
 	// Check that both environments are loaded
 	envNames := make(map[string]bool)
 	for _, env := range environments {
-		envNames[env.Config.Name] = env.Config.Enabled
+		envNames[env.Name] = env.Config.Enabled
 	}
 
 	if !envNames["test-env-1"] {
@@ -88,7 +86,7 @@ func TestLoadEnvironments(t *testing.T) {
 
 	// Find and test the enabled environment
 	for _, env := range environments {
-		if env.Config.Name == "test-env-1" {
+		if env.Name == "test-env-1" {
 			if !env.Config.Enabled {
 				t.Errorf("expected test-env-1 to be enabled")
 			}
@@ -108,7 +106,6 @@ func TestLoadConfig(t *testing.T) {
 	defer func() { _ = os.Remove(tempFile.Name()) }()
 
 	config := Config{
-		Name:            "test-config",
 		Enabled:         true,
 		DeploySchedule:  "0 9 * * 1-5",
 		DestroySchedule: "0 18 * * 1-5",
@@ -131,10 +128,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	// Verify loaded config
-	if loadedConfig.Name != config.Name {
-		t.Errorf("expected name '%s', got '%s'", config.Name, loadedConfig.Name)
-	}
+	// Verify loaded config (name field no longer exists)
 	if loadedConfig.Enabled != config.Enabled {
 		t.Errorf("expected enabled %v, got %v", config.Enabled, loadedConfig.Enabled)
 	}
@@ -280,14 +274,12 @@ func TestConfigJSONSerialization(t *testing.T) {
 		{
 			name: "single schedule strings",
 			jsonData: `{
-				"name": "test",
 				"enabled": true,
 				"deploy_schedule": "0 9 * * 1-5",
 				"destroy_schedule": "0 17 * * 1-5",
 				"description": "test env"
 			}`,
 			expected: Config{
-				Name:            "test",
 				Enabled:         true,
 				DeploySchedule:  "0 9 * * 1-5",
 				DestroySchedule: "0 17 * * 1-5",
@@ -297,14 +289,12 @@ func TestConfigJSONSerialization(t *testing.T) {
 		{
 			name: "multiple deploy schedules",
 			jsonData: `{
-				"name": "test",
 				"enabled": true,
 				"deploy_schedule": ["0 7 * * 1,3,5", "0 8 * * 2,4"],
 				"destroy_schedule": "0 17 * * 1-5",
 				"description": "test env"
 			}`,
 			expected: Config{
-				Name:            "test",
 				Enabled:         true,
 				DeploySchedule:  []interface{}{"0 7 * * 1,3,5", "0 8 * * 2,4"},
 				DestroySchedule: "0 17 * * 1-5",
@@ -321,9 +311,7 @@ func TestConfigJSONSerialization(t *testing.T) {
 				t.Fatalf("failed to unmarshal JSON: %v", err)
 			}
 
-			if config.Name != tt.expected.Name {
-				t.Errorf("expected name '%s', got '%s'", tt.expected.Name, config.Name)
-			}
+			// Name field no longer exists
 			if config.Enabled != tt.expected.Enabled {
 				t.Errorf("expected enabled %v, got %v", tt.expected.Enabled, config.Enabled)
 			}

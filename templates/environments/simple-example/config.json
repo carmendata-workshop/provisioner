@@ -1,5 +1,4 @@
 {
-  "name": "everest",
   "enabled": false,
   "deploy_schedule": "0 7 * * 1-5",
   "destroy_schedule": "30 17 * * 1-5",

@@ -15,7 +15,7 @@ resource "local_file" "environment_marker" {
 variable "environment_name" {
   description = "Name of the environment"
   type        = string
-  default     = "everest"
+  default     = "example"
 }
 
 output "deployment_file" {

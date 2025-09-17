@@ -84,7 +84,7 @@ func (s *Scheduler) LoadEnvironments() error {
 			status = "enabled"
 		}
 		log.Printf("Environment: %s (%s) - deploy: %s, destroy: %s",
-			env.Config.Name,
+			env.Name,
 			status,
 			env.Config.DeploySchedule,
 			env.Config.DestroySchedule)
@@ -173,29 +173,29 @@ func (s *Scheduler) checkSchedules() {
 }
 
 func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now time.Time) {
-	envState := s.state.GetEnvironmentState(env.Config.Name)
+	envState := s.state.GetEnvironmentState(env.Name)
 
 	// Skip if environment is currently being deployed or destroyed
 	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
-		log.Printf("Environment %s is busy (%s), skipping", env.Config.Name, envState.Status)
+		log.Printf("Environment %s is busy (%s), skipping", env.Name, envState.Status)
 		return
 	}
 
 	// Check deploy schedules
 	deploySchedules, err := env.Config.GetDeploySchedules()
 	if err != nil {
-		log.Printf("Invalid deploy schedule for %s: %v", env.Config.Name, err)
+		log.Printf("Invalid deploy schedule for %s: %v", env.Name, err)
 	} else if s.shouldRunAnySchedule(deploySchedules, now) && envState.Status != StatusDeployed {
-		log.Printf("Deploying environment %s", env.Config.Name)
+		log.Printf("Deploying environment %s", env.Name)
 		go s.deployEnvironment(env)
 	}
 
 	// Check destroy schedules
 	destroySchedules, err := env.Config.GetDestroySchedules()
 	if err != nil {
-		log.Printf("Invalid destroy schedule for %s: %v", env.Config.Name, err)
+		log.Printf("Invalid destroy schedule for %s: %v", env.Name, err)
 	} else if s.shouldRunAnySchedule(destroySchedules, now) && envState.Status != StatusDestroyed {
-		log.Printf("Destroying environment %s", env.Config.Name)
+		log.Printf("Destroying environment %s", env.Name)
 		go s.destroyEnvironment(env)
 	}
 }
@@ -216,7 +216,7 @@ func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool
 }
 
 func (s *Scheduler) deployEnvironment(env environment.Environment) {
-	envName := env.Config.Name
+	envName := env.Name
 	log.Printf("Starting deployment of %s", envName)
 
 	s.state.SetEnvironmentStatus(envName, StatusDeploying)
@@ -234,7 +234,7 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 }
 
 func (s *Scheduler) destroyEnvironment(env environment.Environment) {
-	envName := env.Config.Name
+	envName := env.Name
 	log.Printf("Starting destruction of %s", envName)
 
 	s.state.SetEnvironmentStatus(envName, StatusDestroying)
