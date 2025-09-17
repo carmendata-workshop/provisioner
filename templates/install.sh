@@ -114,10 +114,16 @@ cat > /etc/systemd/system/provisioner.service << 'EOF'
 EOF
 systemctl daemon-reload
 
-# Enable service (but don't start automatically)
-echo "🔄 Enabling service..."
+# Enable and start service
+echo "🔄 Enabling and starting service..."
 systemctl enable "$SERVICE_NAME"
+systemctl start "$SERVICE_NAME"
 
+# Check service status
+echo "📊 Service status:"
+systemctl status "$SERVICE_NAME" --no-pager -l
+
+echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "📁 Binary: $INSTALL_DIR/provisioner"
@@ -126,7 +132,7 @@ echo ""
 echo "Next steps:"
 echo "1. Review and configure environments in $CONFIG_DIR/environments/"
 echo "2. Enable example environment: edit config.json and set 'enabled': true"
-echo "3. Start the service: sudo systemctl start $SERVICE_NAME"
+echo "3. Restart service to pick up changes: sudo systemctl restart $SERVICE_NAME"
 echo "4. Check status: sudo systemctl status $SERVICE_NAME"
 echo "5. View logs: sudo journalctl -u $SERVICE_NAME -f"
 echo ""
