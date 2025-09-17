@@ -8,7 +8,7 @@ set -e
 # Get the last tag or use provided base version
 if [ -n "$1" ]; then
     LAST_VERSION="$1"
-elif git describe --tags --abbrev=0 2>/dev/null; then
+elif git describe --tags --abbrev=0 >/dev/null 2>&1; then
     LAST_VERSION=$(git describe --tags --abbrev=0)
 else
     LAST_VERSION="v0.0.0"

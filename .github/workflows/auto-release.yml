@@ -55,6 +55,13 @@ jobs:
         echo "Last version: $LAST_VERSION"
         echo "New version: $NEW_VERSION"
 
+        # Validate version format
+        if [[ ! "$NEW_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "❌ Invalid version format: $NEW_VERSION"
+          echo "   Expected format: vX.Y.Z"
+          exit 1
+        fi
+
         # Check if we should release
         if [ "$NEW_VERSION" != "$LAST_VERSION" ] || [ "${{ inputs.force_release }}" = "true" ]; then
           echo "should-release=true" >> $GITHUB_OUTPUT
@@ -123,9 +130,11 @@ jobs:
         echo "$COMMITS" | grep -v -E "^- (feat|fix)" | sed 's/^- [^:]*: /- /' >> changelog.md || echo "- No other changes" >> changelog.md
 
         # Output for use in release
-        echo "changelog<<EOF" >> $GITHUB_OUTPUT
-        cat changelog.md >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        {
+          echo "changelog<<EOF"
+          cat changelog.md
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
 
   build:
     needs: check-version
