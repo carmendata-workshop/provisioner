@@ -47,11 +47,7 @@ func LoadEnvironments(environmentsDir string) ([]Environment, error) {
 			continue
 		}
 
-		// Only load enabled environments
-		if !config.Enabled {
-			continue
-		}
-
+		// Load all environments (enabled check will be done during scheduling)
 		environments = append(environments, Environment{
 			Config: config,
 			Path:   envPath,

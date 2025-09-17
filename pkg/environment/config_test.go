@@ -68,21 +68,33 @@ func TestLoadEnvironments(t *testing.T) {
 		t.Fatalf("failed to load environments: %v", err)
 	}
 
-	// Should only load enabled environment with config.json
-	if len(environments) != 1 {
-		t.Errorf("expected 1 environment, got %d", len(environments))
+	// Should load all environments with config.json (both enabled and disabled)
+	if len(environments) != 2 {
+		t.Errorf("expected 2 environments, got %d", len(environments))
 	}
 
-	if len(environments) > 0 {
-		env := environments[0]
-		if env.Config.Name != "test-env-1" {
-			t.Errorf("expected name 'test-env-1', got '%s'", env.Config.Name)
-		}
-		if !env.Config.Enabled {
-			t.Errorf("expected enabled=true, got %v", env.Config.Enabled)
-		}
-		if !env.HasMainTF() {
-			t.Errorf("expected main.tf to exist")
+	// Check that both environments are loaded
+	envNames := make(map[string]bool)
+	for _, env := range environments {
+		envNames[env.Config.Name] = env.Config.Enabled
+	}
+
+	if !envNames["test-env-1"] {
+		t.Errorf("expected test-env-1 to be enabled")
+	}
+	if envNames["test-env-2"] {
+		t.Errorf("expected test-env-2 to be disabled")
+	}
+
+	// Find and test the enabled environment
+	for _, env := range environments {
+		if env.Config.Name == "test-env-1" {
+			if !env.Config.Enabled {
+				t.Errorf("expected test-env-1 to be enabled")
+			}
+			if !env.HasMainTF() {
+				t.Errorf("expected main.tf to exist for test-env-1")
+			}
 		}
 	}
 }

@@ -7,16 +7,18 @@ import (
 	"path/filepath"
 	"time"
 
-	"environment-scheduler/pkg/environment"
-	"environment-scheduler/pkg/opentofu"
+	"provisioner/pkg/environment"
+	"provisioner/pkg/opentofu"
 )
 
 type Scheduler struct {
-	environments []environment.Environment
-	state        *State
-	client       opentofu.TofuClient
-	statePath    string
-	stopChan     chan bool
+	environments    []environment.Environment
+	state           *State
+	client          opentofu.TofuClient
+	statePath       string
+	stopChan        chan bool
+	lastConfigCheck time.Time
+	configDir       string
 }
 
 func New() *Scheduler {
@@ -25,9 +27,15 @@ func New() *Scheduler {
 		stateDir = "state"
 	}
 
+	configDir := os.Getenv("PROVISIONER_CONFIG_DIR")
+	if configDir == "" {
+		configDir = "."
+	}
+
 	return &Scheduler{
 		statePath: filepath.Join(stateDir, "scheduler.json"),
 		stopChan:  make(chan bool),
+		configDir: configDir,
 	}
 }
 
@@ -37,19 +45,21 @@ func NewWithClient(client opentofu.TofuClient) *Scheduler {
 		stateDir = "state"
 	}
 
-	return &Scheduler{
-		client:    client,
-		statePath: filepath.Join(stateDir, "scheduler.json"),
-		stopChan:  make(chan bool),
-	}
-}
-
-func (s *Scheduler) LoadEnvironments() error {
 	configDir := os.Getenv("PROVISIONER_CONFIG_DIR")
 	if configDir == "" {
 		configDir = "."
 	}
-	environmentsDir := filepath.Join(configDir, "environments")
+
+	return &Scheduler{
+		client:    client,
+		statePath: filepath.Join(stateDir, "scheduler.json"),
+		stopChan:  make(chan bool),
+		configDir: configDir,
+	}
+}
+
+func (s *Scheduler) LoadEnvironments() error {
+	environmentsDir := filepath.Join(s.configDir, "environments")
 
 	environments, err := environment.LoadEnvironments(environmentsDir)
 	if err != nil {
@@ -57,11 +67,25 @@ func (s *Scheduler) LoadEnvironments() error {
 	}
 
 	s.environments = environments
-	log.Printf("Loaded %d environments", len(s.environments))
+	s.lastConfigCheck = time.Now()
+
+	enabledCount := 0
+	for _, env := range s.environments {
+		if env.Config.Enabled {
+			enabledCount++
+		}
+	}
+
+	log.Printf("Loaded %d environments (%d enabled, %d disabled)", len(s.environments), enabledCount, len(s.environments)-enabledCount)
 
 	for _, env := range s.environments {
-		log.Printf("Environment: %s (deploy: %s, destroy: %s)",
+		status := "disabled"
+		if env.Config.Enabled {
+			status = "enabled"
+		}
+		log.Printf("Environment: %s (%s) - deploy: %s, destroy: %s",
 			env.Config.Name,
+			status,
 			env.Config.DeploySchedule,
 			env.Config.DestroySchedule)
 	}
@@ -123,8 +147,23 @@ func (s *Scheduler) checkSchedules() {
 	now := time.Now()
 	log.Printf("Checking schedules at %s", now.Format("2006-01-02 15:04:05"))
 
+	// Check for configuration changes every 30 seconds
+	if now.Sub(s.lastConfigCheck) > 30*time.Second {
+		if s.hasConfigChanged() {
+			log.Printf("Configuration changes detected, reloading environments...")
+			if err := s.LoadEnvironments(); err != nil {
+				log.Printf("Error reloading environments: %v", err)
+			}
+		} else {
+			s.lastConfigCheck = now
+		}
+	}
+
 	for _, env := range s.environments {
-		s.checkEnvironmentSchedules(env, now)
+		// Only check schedules for enabled environments
+		if env.Config.Enabled {
+			s.checkEnvironmentSchedules(env, now)
+		}
 	}
 
 	// Save state after checking all schedules
@@ -195,4 +234,30 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 	}
 
 	_ = s.SaveState()
+}
+
+// hasConfigChanged checks if any configuration files have been modified
+func (s *Scheduler) hasConfigChanged() bool {
+	environmentsDir := filepath.Join(s.configDir, "environments")
+
+	var hasChanged bool
+
+	// Walk through all environment directories
+	filepath.Walk(environmentsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Continue on error
+		}
+
+		// Check config.json and .tf files
+		if filepath.Base(path) == "config.json" || filepath.Ext(path) == ".tf" {
+			if info.ModTime().After(s.lastConfigCheck) {
+				log.Printf("Config file changed: %s (modified: %s)", path, info.ModTime().Format("2006-01-02 15:04:05"))
+				hasChanged = true
+			}
+		}
+
+		return nil
+	})
+
+	return hasChanged
 }
