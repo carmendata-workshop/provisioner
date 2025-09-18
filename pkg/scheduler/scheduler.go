@@ -292,14 +292,6 @@ func (s *Scheduler) getLastScheduledTimeToday(schedule *CronSchedule, now time.T
 	return lastMatch
 }
 
-// formatTimePtr formats a time pointer for logging, handling nil case
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return "never"
-	}
-	return t.Format("2006-01-02 15:04:05")
-}
-
 // shouldRunAnySchedule checks if any of the provided schedules should run at the given time (legacy exact match)
 func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool {
 	for _, scheduleStr := range schedules {

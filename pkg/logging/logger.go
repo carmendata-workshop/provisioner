@@ -144,7 +144,7 @@ func (l *Logger) Close() {
 
 	for _, logger := range l.envLoggers {
 		if writer, ok := logger.Writer().(io.Closer); ok {
-			writer.Close()
+			_ = writer.Close()
 		}
 	}
 	l.envLoggers = make(map[string]*log.Logger)
