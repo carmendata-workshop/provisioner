@@ -207,6 +207,11 @@ func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, e
 		return false
 	}
 
+	// Don't retry deployment if in failed state (wait for config change)
+	if envState.Status == StatusDeployFailed {
+		return false
+	}
+
 	// Check if any deploy schedule has passed today and we haven't deployed since then
 	for _, scheduleStr := range schedules {
 		schedule, err := ParseCron(scheduleStr)
@@ -351,6 +356,7 @@ func (s *Scheduler) hasConfigChanged() bool {
 	environmentsDir := filepath.Join(s.configDir, "environments")
 
 	var hasChanged bool
+	envConfigChanges := make(map[string]time.Time)
 
 	// Walk through all environment directories
 	err := filepath.Walk(environmentsDir, func(path string, info os.FileInfo, err error) error {
@@ -363,6 +369,12 @@ func (s *Scheduler) hasConfigChanged() bool {
 			if info.ModTime().After(s.lastConfigCheck) {
 				logging.LogSystemd("Config file changed: %s (modified: %s)", path, info.ModTime().Format("2006-01-02 15:04:05"))
 				hasChanged = true
+
+				// Extract environment name from path
+				envName := filepath.Base(filepath.Dir(path))
+				if existingTime, exists := envConfigChanges[envName]; !exists || info.ModTime().After(existingTime) {
+					envConfigChanges[envName] = info.ModTime()
+				}
 			}
 		}
 
@@ -373,5 +385,58 @@ func (s *Scheduler) hasConfigChanged() bool {
 		logging.LogSystemd("Error walking config directory: %v", err)
 	}
 
+	// Update per-environment config modification times and check for immediate deployment
+	now := time.Now()
+	for envName, modTime := range envConfigChanges {
+		s.state.SetEnvironmentConfigModified(envName, modTime)
+		logging.LogSystemd("Environment %s configuration updated, resetting failed state if applicable", envName)
+
+		// Check if this environment should be deployed immediately
+		s.checkEnvironmentForImmediateDeployment(envName, now)
+	}
+
 	return hasChanged
+}
+
+// checkEnvironmentForImmediateDeployment checks if an environment should be deployed immediately after config change
+func (s *Scheduler) checkEnvironmentForImmediateDeployment(envName string, now time.Time) {
+	// Find the environment by name
+	var targetEnv *environment.Environment
+	for i, env := range s.environments {
+		if env.Name == envName {
+			targetEnv = &s.environments[i]
+			break
+		}
+	}
+
+	if targetEnv == nil {
+		logging.LogSystemd("Environment %s not found for immediate deployment check", envName)
+		return
+	}
+
+	// Check if environment is enabled
+	if !targetEnv.Config.Enabled {
+		logging.LogEnvironment(envName, "Environment disabled, skipping immediate deployment")
+		return
+	}
+
+	envState := s.state.GetEnvironmentState(envName)
+
+	// Skip if environment is currently being deployed or destroyed
+	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
+		logging.LogEnvironment(envName, "Environment is busy (%s), skipping immediate deployment", envState.Status)
+		return
+	}
+
+	// Check deploy schedules
+	deploySchedules, err := targetEnv.Config.GetDeploySchedules()
+	if err != nil {
+		logging.LogEnvironment(envName, "Invalid deploy schedule for immediate deployment: %v", err)
+		return
+	}
+
+	if s.ShouldRunDeploySchedule(deploySchedules, now, envState) {
+		logging.LogEnvironment(envName, "Triggering immediate deployment after config change")
+		go s.deployEnvironment(*targetEnv)
+	}
 }

@@ -11,20 +11,22 @@ import (
 type EnvironmentStatus string
 
 const (
-	StatusDeployed   EnvironmentStatus = "deployed"
-	StatusDestroyed  EnvironmentStatus = "destroyed"
-	StatusPending    EnvironmentStatus = "pending"
-	StatusDeploying  EnvironmentStatus = "deploying"
-	StatusDestroying EnvironmentStatus = "destroying"
+	StatusDeployed     EnvironmentStatus = "deployed"
+	StatusDestroyed    EnvironmentStatus = "destroyed"
+	StatusPending      EnvironmentStatus = "pending"
+	StatusDeploying    EnvironmentStatus = "deploying"
+	StatusDestroying   EnvironmentStatus = "destroying"
+	StatusDeployFailed EnvironmentStatus = "deploy_failed"
 )
 
 type EnvironmentState struct {
-	Name             string            `json:"name"`
-	Status           EnvironmentStatus `json:"status"`
-	LastDeployed     *time.Time        `json:"last_deployed,omitempty"`
-	LastDestroyed    *time.Time        `json:"last_destroyed,omitempty"`
-	LastDeployError  string            `json:"last_deploy_error,omitempty"`
-	LastDestroyError string            `json:"last_destroy_error,omitempty"`
+	Name              string            `json:"name"`
+	Status            EnvironmentStatus `json:"status"`
+	LastDeployed      *time.Time        `json:"last_deployed,omitempty"`
+	LastDestroyed     *time.Time        `json:"last_destroyed,omitempty"`
+	LastDeployError   string            `json:"last_deploy_error,omitempty"`
+	LastDestroyError  string            `json:"last_destroy_error,omitempty"`
+	LastConfigModified *time.Time       `json:"last_config_modified,omitempty"`
 }
 
 type State struct {
@@ -115,9 +117,28 @@ func (s *State) SetEnvironmentError(name string, isDeployError bool, errorMsg st
 
 	if isDeployError {
 		env.LastDeployError = errorMsg
-		env.Status = StatusDestroyed
+		env.Status = StatusDeployFailed
 	} else {
 		env.LastDestroyError = errorMsg
 		env.Status = StatusDeployed
+	}
+}
+
+// SetEnvironmentConfigModified updates the last config modification time for an environment
+func (s *State) SetEnvironmentConfigModified(name string, modTime time.Time) {
+	env := s.GetEnvironmentState(name)
+	env.LastConfigModified = &modTime
+
+	// If environment was in failed state and config was modified, allow retries
+	if env.Status == StatusDeployFailed {
+		env.Status = StatusDestroyed
+		env.LastDeployError = ""
+	}
+
+	// If environment is deployed and config was modified, trigger redeployment
+	if env.Status == StatusDeployed {
+		env.Status = StatusDestroyed
+		// Clear deployment timestamp to ensure redeployment
+		env.LastDeployed = nil
 	}
 }

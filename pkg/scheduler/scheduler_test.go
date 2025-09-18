@@ -105,8 +105,8 @@ func TestSchedulerDeployEnvironmentError(t *testing.T) {
 
 	// Verify state shows error
 	envState := scheduler.state.GetEnvironmentState("test-env")
-	if envState.Status != StatusDestroyed {
-		t.Errorf("expected status %s after error, got %s", StatusDestroyed, envState.Status)
+	if envState.Status != StatusDeployFailed {
+		t.Errorf("expected status %s after error, got %s", StatusDeployFailed, envState.Status)
 	}
 
 	if envState.LastDeployError != "deploy failed" {
