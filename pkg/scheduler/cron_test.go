@@ -116,67 +116,67 @@ func TestCronRanges(t *testing.T) {
 	}{
 		{
 			name:     "weekday range match Monday",
-			cronExpr: "0 9 * * 1-5", // Monday-Friday at 9am
+			cronExpr: "0 9 * * 1-5",                                // Monday-Friday at 9am
 			testTime: time.Date(2024, 6, 17, 9, 0, 0, 0, time.UTC), // Monday
 			expected: true,
 		},
 		{
 			name:     "weekday range match Friday",
-			cronExpr: "0 9 * * 1-5", // Monday-Friday at 9am
+			cronExpr: "0 9 * * 1-5",                                // Monday-Friday at 9am
 			testTime: time.Date(2024, 6, 21, 9, 0, 0, 0, time.UTC), // Friday
 			expected: true,
 		},
 		{
 			name:     "weekday range no match Saturday",
-			cronExpr: "0 9 * * 1-5", // Monday-Friday at 9am
+			cronExpr: "0 9 * * 1-5",                                // Monday-Friday at 9am
 			testTime: time.Date(2024, 6, 22, 9, 0, 0, 0, time.UTC), // Saturday
 			expected: false,
 		},
 		{
 			name:     "weekday range no match Sunday",
-			cronExpr: "0 9 * * 1-5", // Monday-Friday at 9am
+			cronExpr: "0 9 * * 1-5",                                // Monday-Friday at 9am
 			testTime: time.Date(2024, 6, 23, 9, 0, 0, 0, time.UTC), // Sunday
 			expected: false,
 		},
 		{
 			name:     "hour range match",
-			cronExpr: "0 9-17 * * *", // Every hour from 9am-5pm
+			cronExpr: "0 9-17 * * *",                                // Every hour from 9am-5pm
 			testTime: time.Date(2024, 6, 17, 14, 0, 0, 0, time.UTC), // 2pm
 			expected: true,
 		},
 		{
 			name:     "hour range no match",
-			cronExpr: "0 9-17 * * *", // Every hour from 9am-5pm
+			cronExpr: "0 9-17 * * *",                               // Every hour from 9am-5pm
 			testTime: time.Date(2024, 6, 17, 8, 0, 0, 0, time.UTC), // 8am
 			expected: false,
 		},
 		{
 			name:     "list match first",
-			cronExpr: "0 9 * * 1,3,5", // Monday, Wednesday, Friday
+			cronExpr: "0 9 * * 1,3,5",                              // Monday, Wednesday, Friday
 			testTime: time.Date(2024, 6, 17, 9, 0, 0, 0, time.UTC), // Monday
 			expected: true,
 		},
 		{
 			name:     "list match middle",
-			cronExpr: "0 9 * * 1,3,5", // Monday, Wednesday, Friday
+			cronExpr: "0 9 * * 1,3,5",                              // Monday, Wednesday, Friday
 			testTime: time.Date(2024, 6, 19, 9, 0, 0, 0, time.UTC), // Wednesday
 			expected: true,
 		},
 		{
 			name:     "list no match",
-			cronExpr: "0 9 * * 1,3,5", // Monday, Wednesday, Friday
+			cronExpr: "0 9 * * 1,3,5",                              // Monday, Wednesday, Friday
 			testTime: time.Date(2024, 6, 18, 9, 0, 0, 0, time.UTC), // Tuesday
 			expected: false,
 		},
 		{
 			name:     "combined range and time",
-			cronExpr: "30 17 * * 1-5", // 5:30pm weekdays
+			cronExpr: "30 17 * * 1-5",                                // 5:30pm weekdays
 			testTime: time.Date(2024, 6, 19, 17, 30, 0, 0, time.UTC), // Wednesday 5:30pm
 			expected: true,
 		},
 		{
 			name:     "combined range wrong time",
-			cronExpr: "30 17 * * 1-5", // 5:30pm weekdays
+			cronExpr: "30 17 * * 1-5",                               // 5:30pm weekdays
 			testTime: time.Date(2024, 6, 19, 17, 0, 0, 0, time.UTC), // Wednesday 5:00pm
 			expected: false,
 		},

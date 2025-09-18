@@ -180,18 +180,19 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 	scheduler.state = NewState()
 
 	// Create test environment with schedules that should trigger
+	// Using specific time schedule instead of "* * * * *" to work with window-based logic
 	env := environment.Environment{
 		Name: "test-env",
 		Config: environment.Config{
 			Enabled:         true,
-			DeploySchedule:  "* * * * *", // Every minute
-			DestroySchedule: "* * * * *", // Every minute
+			DeploySchedule:  "30 14 * * *", // 2:30 PM daily
+			DestroySchedule: "30 14 * * *", // 2:30 PM daily
 		},
 		Path: filepath.Join(tempDir, "test-env"),
 	}
 
-	// Test time that matches the schedule
-	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
+	// Test time after the scheduled time (window-based logic)
+	testTime := time.Date(2024, 6, 15, 14, 35, 0, 0, time.UTC) // 5 minutes after scheduled time
 
 	// Environment starts as destroyed, so deploy should trigger
 	scheduler.checkEnvironmentSchedules(env, testTime)
@@ -208,7 +209,7 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 	mockClient.Reset()
 	scheduler.state.SetEnvironmentStatus("test-env", StatusDeployed)
 
-	// Now destroy should trigger
+	// Now destroy should trigger (since environment is deployed and destroy time has passed)
 	scheduler.checkEnvironmentSchedules(env, testTime)
 
 	// Wait a brief moment for goroutine to complete
@@ -393,8 +394,8 @@ func TestSchedulerMultipleDeploySchedules(t *testing.T) {
 	}
 	scheduler.environments = []environment.Environment{testEnv}
 
-	// Test Monday 9:00 AM - should trigger deploy
-	mondayAM := time.Date(2024, 6, 17, 9, 0, 0, 0, time.UTC)
+	// Test Monday 9:05 AM - should trigger deploy (after 9:00 AM schedule)
+	mondayAM := time.Date(2024, 6, 17, 9, 5, 0, 0, time.UTC)
 	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayAM)
 
 	// Wait for goroutine to complete
@@ -408,10 +409,13 @@ func TestSchedulerMultipleDeploySchedules(t *testing.T) {
 	// Reset mock
 	mockClient.Reset()
 
-	// Test Monday 2:00 PM - should trigger deploy again
-	mondayPM := time.Date(2024, 6, 17, 14, 0, 0, 0, time.UTC)
-	// Reset environment state to allow deployment
+	// Test Monday 2:05 PM - should trigger deploy again (after 2:00 PM schedule)
+	mondayPM := time.Date(2024, 6, 17, 14, 5, 0, 0, time.UTC)
+	// Reset environment state to allow deployment AND clear the last deployed time
+	// so the new schedule window can trigger
 	scheduler.state.SetEnvironmentStatus("test-env", StatusDestroyed)
+	envState := scheduler.state.GetEnvironmentState("test-env")
+	envState.LastDeployed = nil // Clear last deployed time to allow new schedule
 	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayPM)
 
 	// Wait for goroutine to complete
