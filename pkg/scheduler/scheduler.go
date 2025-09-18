@@ -185,7 +185,7 @@ func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now t
 	deploySchedules, err := env.Config.GetDeploySchedules()
 	if err != nil {
 		log.Printf("Invalid deploy schedule for %s: %v", env.Name, err)
-	} else if s.shouldRunAnySchedule(deploySchedules, now) && envState.Status != StatusDeployed {
+	} else if s.ShouldRunDeploySchedule(deploySchedules, now, envState) {
 		log.Printf("Deploying environment %s", env.Name)
 		go s.deployEnvironment(env)
 	}
@@ -194,13 +194,112 @@ func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now t
 	destroySchedules, err := env.Config.GetDestroySchedules()
 	if err != nil {
 		log.Printf("Invalid destroy schedule for %s: %v", env.Name, err)
-	} else if s.shouldRunAnySchedule(destroySchedules, now) && envState.Status != StatusDestroyed {
+	} else if s.ShouldRunDestroySchedule(destroySchedules, now, envState) {
 		log.Printf("Destroying environment %s", env.Name)
 		go s.destroyEnvironment(env)
 	}
 }
 
-// shouldRunAnySchedule checks if any of the provided schedules should run at the given time
+// ShouldRunDeploySchedule checks if environment should be deployed based on schedule and current state
+func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, envState *EnvironmentState) bool {
+	// Don't deploy if already deployed
+	if envState.Status == StatusDeployed {
+		return false
+	}
+
+	// Check if any deploy schedule has passed today and we haven't deployed since then
+	for _, scheduleStr := range schedules {
+		schedule, err := ParseCron(scheduleStr)
+		if err != nil {
+			log.Printf("Failed to parse deploy schedule '%s': %v", scheduleStr, err)
+			continue
+		}
+
+		// Find the most recent time this schedule should have run today
+		lastScheduledTime := s.getLastScheduledTimeToday(schedule, now)
+		if lastScheduledTime == nil {
+			continue // No scheduled time today
+		}
+
+		// Check if we should deploy:
+		// 1. The scheduled time has passed
+		// 2. We haven't deployed since that scheduled time
+		if now.After(*lastScheduledTime) {
+			if envState.LastDeployed == nil || envState.LastDeployed.Before(*lastScheduledTime) {
+				log.Printf("Deploy schedule '%s' triggered: scheduled at %s, last deployed %v",
+					scheduleStr, lastScheduledTime.Format("15:04:05"),
+					formatTimePtr(envState.LastDeployed))
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ShouldRunDestroySchedule checks if environment should be destroyed based on schedule and current state
+func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, envState *EnvironmentState) bool {
+	// Don't destroy if already destroyed
+	if envState.Status == StatusDestroyed {
+		return false
+	}
+
+	// Check if any destroy schedule has passed today and we haven't destroyed since then
+	for _, scheduleStr := range schedules {
+		schedule, err := ParseCron(scheduleStr)
+		if err != nil {
+			log.Printf("Failed to parse destroy schedule '%s': %v", scheduleStr, err)
+			continue
+		}
+
+		// Find the most recent time this schedule should have run today
+		lastScheduledTime := s.getLastScheduledTimeToday(schedule, now)
+		if lastScheduledTime == nil {
+			continue // No scheduled time today
+		}
+
+		// Check if we should destroy:
+		// 1. The scheduled time has passed
+		// 2. We haven't destroyed since that scheduled time
+		if now.After(*lastScheduledTime) {
+			if envState.LastDestroyed == nil || envState.LastDestroyed.Before(*lastScheduledTime) {
+				log.Printf("Destroy schedule '%s' triggered: scheduled at %s, last destroyed %v",
+					scheduleStr, lastScheduledTime.Format("15:04:05"),
+					formatTimePtr(envState.LastDestroyed))
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// getLastScheduledTimeToday finds the most recent time today that matches the CRON schedule
+func (s *Scheduler) getLastScheduledTimeToday(schedule *CronSchedule, now time.Time) *time.Time {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	// Check each minute of today to find the most recent match
+	var lastMatch *time.Time
+	for minute := 0; minute < 24*60; minute++ {
+		checkTime := today.Add(time.Duration(minute) * time.Minute)
+		if checkTime.After(now) {
+			break // Don't check future times
+		}
+		if schedule.ShouldRun(checkTime) {
+			lastMatch = &checkTime
+		}
+	}
+
+	return lastMatch
+}
+
+// formatTimePtr formats a time pointer for logging, handling nil case
+func formatTimePtr(t *time.Time) string {
+	if t == nil {
+		return "never"
+	}
+	return t.Format("2006-01-02 15:04:05")
+}
+
+// shouldRunAnySchedule checks if any of the provided schedules should run at the given time (legacy exact match)
 func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool {
 	for _, scheduleStr := range schedules {
 		schedule, err := ParseCron(scheduleStr)
