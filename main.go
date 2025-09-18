@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"provisioner/pkg/logging"
 	"provisioner/pkg/scheduler"
 	"provisioner/pkg/version"
 )
@@ -33,18 +33,18 @@ func main() {
 		return
 	}
 
-	log.Printf("Starting Environment Scheduler %s", version.GetVersion())
+	logging.LogSystemd("Starting Environment Scheduler %s", version.GetVersion())
 
 	// Initialize scheduler
 	sched := scheduler.New()
 
 	// Load environments and state
 	if err := sched.LoadEnvironments(); err != nil {
-		log.Printf("Error loading environments: %v", err)
+		logging.LogSystemd("Error loading environments: %v", err)
 	}
 
 	if err := sched.LoadState(); err != nil {
-		log.Printf("Error loading state: %v", err)
+		logging.LogSystemd("Error loading state: %v", err)
 	}
 
 	// Start scheduler
@@ -54,15 +54,18 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Println("Environment Scheduler started. Press Ctrl+C to stop.")
+	logging.LogSystemd("Environment Scheduler started. Press Ctrl+C to stop.")
 
 	<-sigChan
-	log.Println("Shutting down...")
+	logging.LogSystemd("Shutting down...")
 
 	// Save state on shutdown
 	if err := sched.SaveState(); err != nil {
-		log.Printf("Error saving state: %v", err)
+		logging.LogSystemd("Error saving state: %v", err)
 	}
 
-	log.Println("Environment Scheduler stopped.")
+	// Close log files
+	logging.GetLogger().Close()
+
+	logging.LogSystemd("Environment Scheduler stopped.")
 }

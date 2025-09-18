@@ -2,12 +2,12 @@ package scheduler
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"provisioner/pkg/environment"
+	"provisioner/pkg/logging"
 	"provisioner/pkg/opentofu"
 )
 
@@ -76,14 +76,14 @@ func (s *Scheduler) LoadEnvironments() error {
 		}
 	}
 
-	log.Printf("Loaded %d environments (%d enabled, %d disabled)", len(s.environments), enabledCount, len(s.environments)-enabledCount)
+	logging.LogSystemd("Loaded %d environments (%d enabled, %d disabled)", len(s.environments), enabledCount, len(s.environments)-enabledCount)
 
 	for _, env := range s.environments {
 		status := "disabled"
 		if env.Config.Enabled {
 			status = "enabled"
 		}
-		log.Printf("Environment: %s (%s) - deploy: %s, destroy: %s",
+		logging.LogSystemd("Environment: %s (%s) - deploy: %s, destroy: %s",
 			env.Name,
 			status,
 			env.Config.DeploySchedule,
@@ -100,7 +100,7 @@ func (s *Scheduler) LoadState() error {
 	}
 
 	s.state = state
-	log.Printf("State loaded with %d environment records", len(s.state.Environments))
+	logging.LogSystemd("State loaded with %d environment records", len(s.state.Environments))
 	return nil
 }
 
@@ -113,13 +113,13 @@ func (s *Scheduler) SaveState() error {
 }
 
 func (s *Scheduler) Start() {
-	log.Println("Starting scheduler loop...")
+	logging.LogSystemd("Starting scheduler loop...")
 
 	// Initialize OpenTofu client if not provided
 	if s.client == nil {
 		client, err := opentofu.New()
 		if err != nil {
-			log.Printf("Failed to initialize OpenTofu client: %v", err)
+			logging.LogSystemd("Failed to initialize OpenTofu client: %v", err)
 			return
 		}
 		s.client = client
@@ -133,7 +133,7 @@ func (s *Scheduler) Start() {
 		case <-ticker.C:
 			s.checkSchedules()
 		case <-s.stopChan:
-			log.Println("Scheduler stopped")
+			logging.LogSystemd("Scheduler stopped")
 			return
 		}
 	}
@@ -145,14 +145,14 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) checkSchedules() {
 	now := time.Now()
-	log.Printf("Checking schedules at %s", now.Format("2006-01-02 15:04:05"))
+	logging.LogSystemd("Checking schedules at %s", now.Format("2006-01-02 15:04:05"))
 
 	// Check for configuration changes every 30 seconds
 	if now.Sub(s.lastConfigCheck) > 30*time.Second {
 		if s.hasConfigChanged() {
-			log.Printf("Configuration changes detected, reloading environments...")
+			logging.LogSystemd("Configuration changes detected, reloading environments...")
 			if err := s.LoadEnvironments(); err != nil {
-				log.Printf("Error reloading environments: %v", err)
+				logging.LogSystemd("Error reloading environments: %v", err)
 			}
 		} else {
 			s.lastConfigCheck = now
@@ -168,7 +168,7 @@ func (s *Scheduler) checkSchedules() {
 
 	// Save state after checking all schedules
 	if err := s.SaveState(); err != nil {
-		log.Printf("Error saving state: %v", err)
+		logging.LogSystemd("Error saving state: %v", err)
 	}
 }
 
@@ -177,25 +177,25 @@ func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now t
 
 	// Skip if environment is currently being deployed or destroyed
 	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
-		log.Printf("Environment %s is busy (%s), skipping", env.Name, envState.Status)
+		logging.LogEnvironment(env.Name, "Environment is busy (%s), skipping", envState.Status)
 		return
 	}
 
 	// Check deploy schedules
 	deploySchedules, err := env.Config.GetDeploySchedules()
 	if err != nil {
-		log.Printf("Invalid deploy schedule for %s: %v", env.Name, err)
+		logging.LogEnvironment(env.Name, "Invalid deploy schedule: %v", err)
 	} else if s.ShouldRunDeploySchedule(deploySchedules, now, envState) {
-		log.Printf("Deploying environment %s", env.Name)
+		logging.LogEnvironment(env.Name, "Triggering deployment")
 		go s.deployEnvironment(env)
 	}
 
 	// Check destroy schedules
 	destroySchedules, err := env.Config.GetDestroySchedules()
 	if err != nil {
-		log.Printf("Invalid destroy schedule for %s: %v", env.Name, err)
+		logging.LogEnvironment(env.Name, "Invalid destroy schedule: %v", err)
 	} else if s.ShouldRunDestroySchedule(destroySchedules, now, envState) {
-		log.Printf("Destroying environment %s", env.Name)
+		logging.LogEnvironment(env.Name, "Triggering destruction")
 		go s.destroyEnvironment(env)
 	}
 }
@@ -211,7 +211,7 @@ func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, e
 	for _, scheduleStr := range schedules {
 		schedule, err := ParseCron(scheduleStr)
 		if err != nil {
-			log.Printf("Failed to parse deploy schedule '%s': %v", scheduleStr, err)
+			logging.LogSystemd("Failed to parse deploy schedule '%s': %v", scheduleStr, err)
 			continue
 		}
 
@@ -226,9 +226,7 @@ func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, e
 		// 2. We haven't deployed since that scheduled time
 		if now.After(*lastScheduledTime) {
 			if envState.LastDeployed == nil || envState.LastDeployed.Before(*lastScheduledTime) {
-				log.Printf("Deploy schedule '%s' triggered: scheduled at %s, last deployed %v",
-					scheduleStr, lastScheduledTime.Format("15:04:05"),
-					formatTimePtr(envState.LastDeployed))
+				// Note: We don't log here since this will be logged in checkEnvironmentSchedules
 				return true
 			}
 		}
@@ -247,7 +245,7 @@ func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, 
 	for _, scheduleStr := range schedules {
 		schedule, err := ParseCron(scheduleStr)
 		if err != nil {
-			log.Printf("Failed to parse destroy schedule '%s': %v", scheduleStr, err)
+			logging.LogSystemd("Failed to parse destroy schedule '%s': %v", scheduleStr, err)
 			continue
 		}
 
@@ -262,9 +260,7 @@ func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, 
 		// 2. We haven't destroyed since that scheduled time
 		if now.After(*lastScheduledTime) {
 			if envState.LastDestroyed == nil || envState.LastDestroyed.Before(*lastScheduledTime) {
-				log.Printf("Destroy schedule '%s' triggered: scheduled at %s, last destroyed %v",
-					scheduleStr, lastScheduledTime.Format("15:04:05"),
-					formatTimePtr(envState.LastDestroyed))
+				// Note: We don't log here since this will be logged in checkEnvironmentSchedules
 				return true
 			}
 		}
@@ -304,7 +300,7 @@ func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool
 	for _, scheduleStr := range schedules {
 		schedule, err := ParseCron(scheduleStr)
 		if err != nil {
-			log.Printf("Failed to parse schedule '%s': %v", scheduleStr, err)
+			logging.LogSystemd("Failed to parse schedule '%s': %v", scheduleStr, err)
 			continue
 		}
 		if schedule.ShouldRun(now) {
@@ -316,16 +312,16 @@ func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool
 
 func (s *Scheduler) deployEnvironment(env environment.Environment) {
 	envName := env.Name
-	log.Printf("Starting deployment of %s", envName)
+	logging.LogEnvironmentOperation(envName, "DEPLOY", "Starting deployment")
 
 	s.state.SetEnvironmentStatus(envName, StatusDeploying)
 	_ = s.SaveState()
 
 	if err := s.client.Deploy(env.Path); err != nil {
-		log.Printf("Failed to deploy %s: %v", envName, err)
+		logging.LogEnvironmentOperation(envName, "DEPLOY", "Failed: %v", err)
 		s.state.SetEnvironmentError(envName, true, err.Error())
 	} else {
-		log.Printf("Successfully deployed %s", envName)
+		logging.LogEnvironmentOperation(envName, "DEPLOY", "Successfully completed")
 		s.state.SetEnvironmentStatus(envName, StatusDeployed)
 	}
 
@@ -334,16 +330,16 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 
 func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 	envName := env.Name
-	log.Printf("Starting destruction of %s", envName)
+	logging.LogEnvironmentOperation(envName, "DESTROY", "Starting destruction")
 
 	s.state.SetEnvironmentStatus(envName, StatusDestroying)
 	_ = s.SaveState()
 
 	if err := s.client.DestroyEnvironment(env.Path); err != nil {
-		log.Printf("Failed to destroy %s: %v", envName, err)
+		logging.LogEnvironmentOperation(envName, "DESTROY", "Failed: %v", err)
 		s.state.SetEnvironmentError(envName, false, err.Error())
 	} else {
-		log.Printf("Successfully destroyed %s", envName)
+		logging.LogEnvironmentOperation(envName, "DESTROY", "Successfully completed")
 		s.state.SetEnvironmentStatus(envName, StatusDestroyed)
 	}
 
@@ -365,7 +361,7 @@ func (s *Scheduler) hasConfigChanged() bool {
 		// Check config.json and .tf files
 		if filepath.Base(path) == "config.json" || filepath.Ext(path) == ".tf" {
 			if info.ModTime().After(s.lastConfigCheck) {
-				log.Printf("Config file changed: %s (modified: %s)", path, info.ModTime().Format("2006-01-02 15:04:05"))
+				logging.LogSystemd("Config file changed: %s (modified: %s)", path, info.ModTime().Format("2006-01-02 15:04:05"))
 				hasChanged = true
 			}
 		}
@@ -374,7 +370,7 @@ func (s *Scheduler) hasConfigChanged() bool {
 	})
 
 	if err != nil {
-		log.Printf("Error walking config directory: %v", err)
+		logging.LogSystemd("Error walking config directory: %v", err)
 	}
 
 	return hasChanged
