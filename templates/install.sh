@@ -104,6 +104,15 @@ else
 fi
 chmod +x "$INSTALL_DIR/provisioner"
 
+# Create symlink in /usr/local/bin for system-wide access
+echo "🔗 Creating system-wide command access..."
+if ln -sf "$INSTALL_DIR/provisioner" /usr/local/bin/provisioner; then
+    echo "✅ Created symlink: /usr/local/bin/provisioner -> $INSTALL_DIR/provisioner"
+else
+    echo "⚠️  Warning: Failed to create symlink in /usr/local/bin"
+    echo "   You can manually add $INSTALL_DIR to your PATH or create the symlink later"
+fi
+
 # Create example environment
 echo "📋 Creating example environment..."
 mkdir -p "$CONFIG_DIR/environments/example"
@@ -183,3 +192,7 @@ echo "  - Configuration: $CONFIG_DIR/"
 echo "  - State data: $STATE_DIR/"
 echo "  - Log files: $LOG_DIR/"
 echo "  - System logs: journalctl -u $SERVICE_NAME"
+echo ""
+echo "💻 Command access:"
+echo "  - System-wide: provisioner --help"
+echo "  - Direct path: $INSTALL_DIR/provisioner --help"
