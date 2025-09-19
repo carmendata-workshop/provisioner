@@ -12,18 +12,18 @@
 All indirect dependencies come from `github.com/opentofu/tofudl` for secure OpenTofu binary management:
 
 ### Cryptographic Verification (ProtonMail ecosystem)
-- `github.com/ProtonMail/go-crypto` - OpenPGP implementation
-- `github.com/ProtonMail/go-mime` - MIME handling for signed content
-- `github.com/ProtonMail/gopenpgp/v2` - High-level OpenPGP wrapper
+- `github.com/ProtonMail/go-crypto v1.3.0` - OpenPGP implementation
+- `github.com/ProtonMail/go-mime v0.0.0-20230322103455-7d82a3887f2f` - MIME handling for signed content
+- `github.com/ProtonMail/gopenpgp/v2 v2.9.0` - High-level OpenPGP wrapper
 
 ### Additional Security
-- `github.com/cloudflare/circl` - Cloudflare's cryptographic library
-- `golang.org/x/crypto` - Go's extended cryptography package
+- `github.com/cloudflare/circl v1.6.1` - Cloudflare's cryptographic library
+- `golang.org/x/crypto v0.42.0` - Go's extended cryptography package
 
 ### System & Utilities
-- `github.com/pkg/errors` - Enhanced error handling
-- `golang.org/x/sys` - Platform-specific system calls
-- `golang.org/x/text` - Text processing
+- `github.com/pkg/errors v0.9.1` - Enhanced error handling
+- `golang.org/x/sys v0.36.0` - Platform-specific system calls
+- `golang.org/x/text v0.29.0` - Text processing
 
 ## Why So Many Crypto Dependencies?
 

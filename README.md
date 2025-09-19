@@ -84,7 +84,8 @@ provisioner/
 │   ├── scheduler/           # CRON scheduling and state management
 │   ├── environment/         # Environment configuration loading
 │   ├── opentofu/           # OpenTofu CLI wrapper
-│   └── logging/            # Logging utilities
+│   ├── logging/            # Dual logging (systemd + file)
+│   └── version/            # Build information and versioning
 ├── environments/           # Environment templates
 │   └── example/
 │       ├── main.tf         # OpenTofu template
@@ -435,7 +436,7 @@ Systemd logs: journalctl -u provisioner
 
 ## Dependencies
 
-- **Go 1.21+** - For building the application
+- **Go 1.25.1+** - For building the application
 - **github.com/opentofu/tofudl** - OpenTofu binary management
 - **OpenTofu binary** - Automatically downloaded if not in PATH
 - **systemd** - For service management on Linux
@@ -491,9 +492,36 @@ All operations are logged with timestamps:
 - State changes and errors
 - Application lifecycle events
 
+## Manual Operations
+
+The provisioner supports immediate deployment and destruction of environments bypassing the CRON schedule:
+
+### Deploy Environment
+```bash
+provisioner deploy my-app
+```
+- Validates environment exists and is enabled
+- Checks environment is not currently deploying/destroying
+- Executes deployment immediately using OpenTofu
+- Updates state and provides detailed logging
+
+### Destroy Environment
+```bash
+provisioner destroy test-env
+```
+- Validates environment exists and is enabled
+- Checks environment is not currently deploying/destroying
+- Executes destruction immediately using OpenTofu
+- Updates state and provides detailed logging
+
+### Error Handling
+- **Environment not found**: Returns clear error message
+- **Environment disabled**: Returns error, requires enabling in `config.json`
+- **Environment busy**: Returns error if currently deploying/destroying
+- **Operation failures**: Logs detailed errors to environment-specific log files
+
 ## Limitations (MVP)
 
-- No manual trigger capability
 - No retry logic for failed operations
 - No web UI or API
 - No multi-instance coordination
