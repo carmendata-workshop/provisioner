@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/opentofu/tofudl"
 )
@@ -150,15 +151,18 @@ func (c *Client) Destroy(workingDir string) error {
 }
 
 func (c *Client) Deploy(environmentPath string) error {
-	// Create temporary working directory
-	workingDir, err := os.MkdirTemp("", "tofu-deploy-*")
-	if err != nil {
+	// Create persistent working directory based on environment name
+	envName := filepath.Base(environmentPath)
+	stateDir := getStateDir()
+	workingDir := filepath.Join(stateDir, envName)
+
+	// Ensure working directory exists
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
 		return fmt.Errorf("failed to create working directory: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(workingDir) }()
 
-	// Copy environment files to working directory
-	if err := copyDir(environmentPath, workingDir); err != nil {
+	// Copy environment template files to working directory (preserving state files)
+	if err := copyEnvironmentFiles(environmentPath, workingDir); err != nil {
 		return fmt.Errorf("failed to copy environment files: %w", err)
 	}
 
@@ -179,15 +183,18 @@ func (c *Client) Deploy(environmentPath string) error {
 }
 
 func (c *Client) DestroyEnvironment(environmentPath string) error {
-	// Create temporary working directory
-	workingDir, err := os.MkdirTemp("", "tofu-destroy-*")
-	if err != nil {
+	// Use persistent working directory based on environment name
+	envName := filepath.Base(environmentPath)
+	stateDir := getStateDir()
+	workingDir := filepath.Join(stateDir, envName)
+
+	// Ensure working directory exists
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
 		return fmt.Errorf("failed to create working directory: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(workingDir) }()
 
-	// Copy environment files to working directory
-	if err := copyDir(environmentPath, workingDir); err != nil {
+	// Copy environment template files to working directory (preserving state files)
+	if err := copyEnvironmentFiles(environmentPath, workingDir); err != nil {
 		return fmt.Errorf("failed to copy environment files: %w", err)
 	}
 
@@ -201,6 +208,55 @@ func (c *Client) DestroyEnvironment(environmentPath string) error {
 	}
 
 	return nil
+}
+
+// copyEnvironmentFiles copies template files while preserving OpenTofu state files
+func copyEnvironmentFiles(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		dstPath := filepath.Join(dst, relPath)
+
+		// Skip OpenTofu state and cache files to preserve state
+		if shouldSkipFile(relPath) {
+			return nil
+		}
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		return os.WriteFile(dstPath, data, info.Mode())
+	})
+}
+
+// shouldSkipFile determines if a file should be skipped during copy to preserve OpenTofu state
+func shouldSkipFile(relPath string) bool {
+	// Skip OpenTofu state files
+	if relPath == "terraform.tfstate" || relPath == "terraform.tfstate.backup" {
+		return true
+	}
+	// Skip .terraform directory (provider cache, etc.)
+	if relPath == ".terraform" || strings.HasPrefix(relPath, ".terraform/") {
+		return true
+	}
+	// Skip plan files
+	if strings.HasSuffix(relPath, ".tfplan") {
+		return true
+	}
+	return false
 }
 
 func copyDir(src, dst string) error {
@@ -227,4 +283,25 @@ func copyDir(src, dst string) error {
 
 		return os.WriteFile(dstPath, data, info.Mode())
 	})
+}
+
+// getStateDir determines the state directory using auto-discovery
+func getStateDir() string {
+	// First check environment variable (explicit override)
+	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
+		return stateDir
+	}
+
+	// Auto-detect system installation
+	if _, err := os.Stat("/var/lib/provisioner"); err == nil {
+		return "/var/lib/provisioner"
+	}
+
+	// Try to create system state directory (in case this is first run after installation)
+	if err := os.MkdirAll("/var/lib/provisioner", 0755); err == nil {
+		return "/var/lib/provisioner"
+	}
+
+	// Fall back to development default
+	return "state"
 }
