@@ -1,6 +1,7 @@
 package opentofu
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -60,41 +61,97 @@ func New() (*Client, error) {
 func (c *Client) Init(workingDir string) error {
 	cmd := exec.Command(c.binaryPath, "init")
 	cmd.Dir = workingDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	log.Printf("Running: tofu init in %s", workingDir)
-	return cmd.Run()
+	err := cmd.Run()
+
+	// Include detailed output in error for environment logs
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
 }
 
 func (c *Client) Plan(workingDir string) error {
 	cmd := exec.Command(c.binaryPath, "plan")
 	cmd.Dir = workingDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	log.Printf("Running: tofu plan in %s", workingDir)
-	return cmd.Run()
+	err := cmd.Run()
+
+	// Include detailed output in error for environment logs
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
 }
 
 func (c *Client) Apply(workingDir string) error {
 	cmd := exec.Command(c.binaryPath, "apply", "-auto-approve")
 	cmd.Dir = workingDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	log.Printf("Running: tofu apply in %s", workingDir)
-	return cmd.Run()
+	err := cmd.Run()
+
+	// Include detailed output in error for environment logs
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
 }
 
 func (c *Client) Destroy(workingDir string) error {
 	cmd := exec.Command(c.binaryPath, "destroy", "-auto-approve")
 	cmd.Dir = workingDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	log.Printf("Running: tofu destroy in %s", workingDir)
-	return cmd.Run()
+	err := cmd.Run()
+
+	// Include detailed output in error for environment logs
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
 }
 
 func (c *Client) Deploy(environmentPath string) error {

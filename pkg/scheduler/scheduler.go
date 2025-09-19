@@ -246,6 +246,11 @@ func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, 
 		return false
 	}
 
+	// Don't retry destruction if in failed state (wait for config change)
+	if envState.Status == StatusDestroyFailed {
+		return false
+	}
+
 	// Check if any destroy schedule has passed today and we haven't destroyed since then
 	for _, scheduleStr := range schedules {
 		schedule, err := ParseCron(scheduleStr)
@@ -316,6 +321,11 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 
 	if err := s.client.Deploy(env.Path); err != nil {
 		logging.LogEnvironmentOperation(envName, "DEPLOY", "Failed: %v", err)
+
+		// Add log file location reference to systemd logs for easier debugging
+		logFile := s.getEnvironmentLogFile(envName)
+		logging.LogSystemd("For detailed error information see: %s", logFile)
+
 		s.state.SetEnvironmentError(envName, true, err.Error())
 	} else {
 		logging.LogEnvironmentOperation(envName, "DEPLOY", "Successfully completed")
@@ -334,6 +344,11 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 
 	if err := s.client.DestroyEnvironment(env.Path); err != nil {
 		logging.LogEnvironmentOperation(envName, "DESTROY", "Failed: %v", err)
+
+		// Add log file location reference to systemd logs for easier debugging
+		logFile := s.getEnvironmentLogFile(envName)
+		logging.LogSystemd("For detailed error information see: %s", logFile)
+
 		s.state.SetEnvironmentError(envName, false, err.Error())
 	} else {
 		logging.LogEnvironmentOperation(envName, "DESTROY", "Successfully completed")
@@ -388,6 +403,15 @@ func (s *Scheduler) hasConfigChanged() bool {
 	}
 
 	return hasChanged
+}
+
+// getEnvironmentLogFile returns the log file path for an environment
+func (s *Scheduler) getEnvironmentLogFile(envName string) string {
+	logDir := os.Getenv("PROVISIONER_LOG_DIR")
+	if logDir == "" {
+		logDir = "/var/log/provisioner"
+	}
+	return filepath.Join(logDir, fmt.Sprintf("%s.log", envName))
 }
 
 // checkEnvironmentForImmediateDeployment checks if an environment should be deployed immediately after config change

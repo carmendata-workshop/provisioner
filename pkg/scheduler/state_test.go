@@ -156,8 +156,8 @@ func TestSetEnvironmentError(t *testing.T) {
 		t.Errorf("expected destroy error 'destroy failed', got '%s'", env.LastDestroyError)
 	}
 
-	if env.Status != StatusDeployed {
-		t.Errorf("expected status %s after destroy error, got %s", StatusDeployed, env.Status)
+	if env.Status != StatusDestroyFailed {
+		t.Errorf("expected status %s after destroy error, got %s", StatusDestroyFailed, env.Status)
 	}
 }
 

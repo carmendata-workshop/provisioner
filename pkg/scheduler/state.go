@@ -11,12 +11,13 @@ import (
 type EnvironmentStatus string
 
 const (
-	StatusDeployed     EnvironmentStatus = "deployed"
-	StatusDestroyed    EnvironmentStatus = "destroyed"
-	StatusPending      EnvironmentStatus = "pending"
-	StatusDeploying    EnvironmentStatus = "deploying"
-	StatusDestroying   EnvironmentStatus = "destroying"
-	StatusDeployFailed EnvironmentStatus = "deploy_failed"
+	StatusDeployed      EnvironmentStatus = "deployed"
+	StatusDestroyed     EnvironmentStatus = "destroyed"
+	StatusPending       EnvironmentStatus = "pending"
+	StatusDeploying     EnvironmentStatus = "deploying"
+	StatusDestroying    EnvironmentStatus = "destroying"
+	StatusDeployFailed  EnvironmentStatus = "deploy_failed"
+	StatusDestroyFailed EnvironmentStatus = "destroy_failed"
 )
 
 type EnvironmentState struct {
@@ -120,7 +121,7 @@ func (s *State) SetEnvironmentError(name string, isDeployError bool, errorMsg st
 		env.Status = StatusDeployFailed
 	} else {
 		env.LastDestroyError = errorMsg
-		env.Status = StatusDeployed
+		env.Status = StatusDestroyFailed
 	}
 }
 
@@ -129,14 +130,18 @@ func (s *State) SetEnvironmentConfigModified(name string, modTime time.Time) {
 	env := s.GetEnvironmentState(name)
 	env.LastConfigModified = &modTime
 
-	// If environment was in failed state and config was modified, allow retries
-	if env.Status == StatusDeployFailed {
+	// Handle state transitions based on current status when config is modified
+	switch env.Status {
+	case StatusDeployFailed:
+		// If environment was in deploy failed state, allow retries
 		env.Status = StatusDestroyed
 		env.LastDeployError = ""
-	}
-
-	// If environment is deployed and config was modified, trigger redeployment
-	if env.Status == StatusDeployed {
+	case StatusDestroyFailed:
+		// If environment was in destroy failed state, allow retries
+		env.Status = StatusDeployed
+		env.LastDestroyError = ""
+	case StatusDeployed:
+		// If environment is deployed and config was modified, trigger redeployment
 		env.Status = StatusDestroyed
 		// Clear deployment timestamp to ensure redeployment
 		env.LastDeployed = nil
