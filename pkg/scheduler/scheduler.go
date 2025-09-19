@@ -487,3 +487,161 @@ func stripANSIColors(text string) string {
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	return ansiRegex.ReplaceAllString(text, "")
 }
+
+// ManualDeploy deploys a specific environment immediately, bypassing schedule checks
+func (s *Scheduler) ManualDeploy(envName string) error {
+	// Find the environment by name
+	var targetEnv *environment.Environment
+	for i, env := range s.environments {
+		if env.Name == envName {
+			targetEnv = &s.environments[i]
+			break
+		}
+	}
+
+	if targetEnv == nil {
+		return fmt.Errorf("environment '%s' not found in configuration", envName)
+	}
+
+	// Check if environment is enabled
+	if !targetEnv.Config.Enabled {
+		return fmt.Errorf("environment '%s' is disabled in configuration", envName)
+	}
+
+	envState := s.state.GetEnvironmentState(envName)
+
+	// Check if environment is currently busy
+	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
+		return fmt.Errorf("environment '%s' is currently %s, cannot deploy", envName, envState.Status)
+	}
+
+	logging.LogSystemd("Manual deployment requested for environment: %s", envName)
+
+	// Execute deployment directly (not in goroutine for immediate feedback)
+	s.manualDeployEnvironment(*targetEnv)
+
+	// Save state after manual operation
+	if err := s.SaveState(); err != nil {
+		logging.LogSystemd("Error saving state after manual deploy: %v", err)
+		return fmt.Errorf("deployment completed but failed to save state: %w", err)
+	}
+
+	return nil
+}
+
+// ManualDestroy destroys a specific environment immediately, bypassing schedule checks
+func (s *Scheduler) ManualDestroy(envName string) error {
+	// Find the environment by name
+	var targetEnv *environment.Environment
+	for i, env := range s.environments {
+		if env.Name == envName {
+			targetEnv = &s.environments[i]
+			break
+		}
+	}
+
+	if targetEnv == nil {
+		return fmt.Errorf("environment '%s' not found in configuration", envName)
+	}
+
+	// Check if environment is enabled
+	if !targetEnv.Config.Enabled {
+		return fmt.Errorf("environment '%s' is disabled in configuration", envName)
+	}
+
+	envState := s.state.GetEnvironmentState(envName)
+
+	// Check if environment is currently busy
+	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
+		return fmt.Errorf("environment '%s' is currently %s, cannot destroy", envName, envState.Status)
+	}
+
+	logging.LogSystemd("Manual destruction requested for environment: %s", envName)
+
+	// Execute destruction directly (not in goroutine for immediate feedback)
+	s.manualDestroyEnvironment(*targetEnv)
+
+	// Save state after manual operation
+	if err := s.SaveState(); err != nil {
+		logging.LogSystemd("Error saving state after manual destroy: %v", err)
+		return fmt.Errorf("destruction completed but failed to save state: %w", err)
+	}
+
+	return nil
+}
+
+// manualDeployEnvironment is similar to deployEnvironment but for manual operations
+func (s *Scheduler) manualDeployEnvironment(env environment.Environment) {
+	envName := env.Name
+	logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Starting manual deployment")
+
+	s.state.SetEnvironmentStatus(envName, StatusDeploying)
+	_ = s.SaveState()
+
+	// Initialize OpenTofu client if not provided
+	if s.client == nil {
+		client, err := opentofu.New()
+		if err != nil {
+			logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Failed to initialize OpenTofu client: %s", err.Error())
+			s.state.SetEnvironmentError(envName, true, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
+			return
+		}
+		s.client = client
+	}
+
+	if err := s.client.Deploy(env.Path); err != nil {
+		// Log high-level failure to systemd
+		logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Failed: %s", getHighLevelError(err))
+
+		// Log detailed error only to environment file (strip ANSI colors)
+		cleanError := stripANSIColors(err.Error())
+		logging.LogEnvironmentOnly(envName, "MANUAL DEPLOY: Failed: %s", cleanError)
+
+		// Add log file location reference to systemd logs for easier debugging
+		logFile := s.getEnvironmentLogFile(envName)
+		logging.LogSystemd("For detailed error information see: %s", logFile)
+
+		s.state.SetEnvironmentError(envName, true, err.Error())
+	} else {
+		logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Successfully completed")
+		s.state.SetEnvironmentStatus(envName, StatusDeployed)
+	}
+}
+
+// manualDestroyEnvironment is similar to destroyEnvironment but for manual operations
+func (s *Scheduler) manualDestroyEnvironment(env environment.Environment) {
+	envName := env.Name
+	logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Starting manual destruction")
+
+	s.state.SetEnvironmentStatus(envName, StatusDestroying)
+	_ = s.SaveState()
+
+	// Initialize OpenTofu client if not provided
+	if s.client == nil {
+		client, err := opentofu.New()
+		if err != nil {
+			logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Failed to initialize OpenTofu client: %s", err.Error())
+			s.state.SetEnvironmentError(envName, false, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
+			return
+		}
+		s.client = client
+	}
+
+	if err := s.client.DestroyEnvironment(env.Path); err != nil {
+		// Log high-level failure to systemd
+		logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Failed: %s", getHighLevelError(err))
+
+		// Log detailed error only to environment file (strip ANSI colors)
+		cleanError := stripANSIColors(err.Error())
+		logging.LogEnvironmentOnly(envName, "MANUAL DESTROY: Failed: %s", cleanError)
+
+		// Add log file location reference to systemd logs for easier debugging
+		logFile := s.getEnvironmentLogFile(envName)
+		logging.LogSystemd("For detailed error information see: %s", logFile)
+
+		s.state.SetEnvironmentError(envName, false, err.Error())
+	} else {
+		logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Successfully completed")
+		s.state.SetEnvironmentStatus(envName, StatusDestroyed)
+	}
+}

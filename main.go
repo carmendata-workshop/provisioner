@@ -12,14 +12,58 @@ import (
 	"provisioner/pkg/version"
 )
 
+func printUsage() {
+	fmt.Printf(`Usage: %s [COMMAND] [ENVIRONMENT]
+
+Commands:
+  deploy ENVIRONMENT    Deploy specific environment immediately
+  destroy ENVIRONMENT   Destroy specific environment immediately
+
+Options:
+  --help               Show this help
+  --version           Show version
+  --version-full      Show detailed version
+
+If no command is specified, runs the scheduler daemon.
+
+Examples:
+  %s deploy my-app        # Deploy 'my-app' environment immediately
+  %s destroy test-env     # Destroy 'test-env' environment immediately
+  %s                      # Run scheduler daemon (default)
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+}
+
 func main() {
+	// Parse command-line arguments for manual operations first
+	if len(os.Args) >= 2 {
+		command := os.Args[1]
+
+		// Handle manual operations
+		if command == "deploy" || command == "destroy" {
+			if len(os.Args) != 3 {
+				fmt.Fprintf(os.Stderr, "Error: %s command requires exactly one environment name\n\n", command)
+				printUsage()
+				os.Exit(2)
+			}
+
+			envName := os.Args[2]
+			if err := runManualOperation(command, envName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+	}
+
+	// Parse flags for version/help commands
 	var showVersion = flag.Bool("version", false, "Show version information")
 	var showFullVersion = flag.Bool("version-full", false, "Show detailed version information")
 	var showHelp = flag.Bool("help", false, "Show help information")
+	flag.Usage = printUsage
 	flag.Parse()
 
 	if *showHelp {
-		flag.Usage()
+		printUsage()
 		return
 	}
 
@@ -68,4 +112,29 @@ func main() {
 	logging.GetLogger().Close()
 
 	logging.LogSystemd("Environment Scheduler stopped.")
+}
+
+func runManualOperation(command, envName string) error {
+	// Initialize scheduler
+	sched := scheduler.New()
+
+	// Load environments to validate the specified environment exists
+	if err := sched.LoadEnvironments(); err != nil {
+		return fmt.Errorf("failed to load environments: %w", err)
+	}
+
+	// Load state to check current environment status
+	if err := sched.LoadState(); err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	// Execute the manual operation
+	switch command {
+	case "deploy":
+		return sched.ManualDeploy(envName)
+	case "destroy":
+		return sched.ManualDestroy(envName)
+	default:
+		return fmt.Errorf("unknown command: %s", command)
+	}
 }
