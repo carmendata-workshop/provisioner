@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,7 +65,6 @@ func (c *Client) Init(workingDir string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	log.Printf("Running: tofu init in %s", workingDir)
 	err := cmd.Run()
 
 	// Include detailed output in error for environment logs
@@ -90,7 +88,6 @@ func (c *Client) Plan(workingDir string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	log.Printf("Running: tofu plan in %s", workingDir)
 	err := cmd.Run()
 
 	// Include detailed output in error for environment logs
@@ -114,7 +111,6 @@ func (c *Client) Apply(workingDir string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	log.Printf("Running: tofu apply in %s", workingDir)
 	err := cmd.Run()
 
 	// Include detailed output in error for environment logs
@@ -138,7 +134,6 @@ func (c *Client) Destroy(workingDir string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	log.Printf("Running: tofu destroy in %s", workingDir)
 	err := cmd.Run()
 
 	// Include detailed output in error for environment logs

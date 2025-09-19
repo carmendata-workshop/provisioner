@@ -124,6 +124,15 @@ func (l *Logger) LogEnvironmentOperation(envName, operation, format string, v ..
 	envLogger.Printf("%s: %s", operation, message)
 }
 
+// LogEnvironmentOnly logs only to environment file (not systemd)
+func (l *Logger) LogEnvironmentOnly(envName, format string, v ...interface{}) {
+	message := fmt.Sprintf(format, v...)
+
+	// Log only to environment file (with timestamp)
+	envLogger := l.getEnvLogger(envName)
+	envLogger.Printf("%s", message)
+}
+
 // Convenience functions for global usage
 func LogSystemd(format string, v ...interface{}) {
 	GetLogger().LogSystemd(format, v...)
@@ -135,6 +144,10 @@ func LogEnvironment(envName, format string, v ...interface{}) {
 
 func LogEnvironmentOperation(envName, operation, format string, v ...interface{}) {
 	GetLogger().LogEnvironmentOperation(envName, operation, format, v...)
+}
+
+func LogEnvironmentOnly(envName, format string, v ...interface{}) {
+	GetLogger().LogEnvironmentOnly(envName, format, v...)
 }
 
 // Close closes all open log files

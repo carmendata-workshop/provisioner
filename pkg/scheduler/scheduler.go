@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"provisioner/pkg/environment"
@@ -320,7 +322,12 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 	_ = s.SaveState()
 
 	if err := s.client.Deploy(env.Path); err != nil {
-		logging.LogEnvironmentOperation(envName, "DEPLOY", "Failed: %v", err)
+		// Log high-level failure to systemd
+		logging.LogEnvironmentOperation(envName, "DEPLOY", "Failed: %s", getHighLevelError(err))
+
+		// Log detailed error only to environment file (strip ANSI colors)
+		cleanError := stripANSIColors(err.Error())
+		logging.LogEnvironmentOnly(envName, "DEPLOY: Failed: %s", cleanError)
 
 		// Add log file location reference to systemd logs for easier debugging
 		logFile := s.getEnvironmentLogFile(envName)
@@ -343,7 +350,12 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 	_ = s.SaveState()
 
 	if err := s.client.DestroyEnvironment(env.Path); err != nil {
-		logging.LogEnvironmentOperation(envName, "DESTROY", "Failed: %v", err)
+		// Log high-level failure to systemd
+		logging.LogEnvironmentOperation(envName, "DESTROY", "Failed: %s", getHighLevelError(err))
+
+		// Log detailed error only to environment file (strip ANSI colors)
+		cleanError := stripANSIColors(err.Error())
+		logging.LogEnvironmentOnly(envName, "DESTROY: Failed: %s", cleanError)
 
 		// Add log file location reference to systemd logs for easier debugging
 		logFile := s.getEnvironmentLogFile(envName)
@@ -455,4 +467,23 @@ func (s *Scheduler) checkEnvironmentForImmediateDeployment(envName string, now t
 		logging.LogEnvironment(envName, "Triggering immediate deployment after config change")
 		go s.deployEnvironment(*targetEnv)
 	}
+}
+
+// getHighLevelError extracts the main error message without detailed output
+func getHighLevelError(err error) string {
+	errorMsg := err.Error()
+
+	// Split on "Detailed output:" to get just the main error
+	if idx := strings.Index(errorMsg, "\n\nDetailed output:"); idx != -1 {
+		return errorMsg[:idx]
+	}
+
+	return errorMsg
+}
+
+// stripANSIColors removes ANSI color escape sequences from text
+func stripANSIColors(text string) string {
+	// Regex to match ANSI escape sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return ansiRegex.ReplaceAllString(text, "")
 }
