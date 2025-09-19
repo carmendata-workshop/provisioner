@@ -24,15 +24,8 @@ type Scheduler struct {
 }
 
 func New() *Scheduler {
-	stateDir := os.Getenv("PROVISIONER_STATE_DIR")
-	if stateDir == "" {
-		stateDir = "state"
-	}
-
-	configDir := os.Getenv("PROVISIONER_CONFIG_DIR")
-	if configDir == "" {
-		configDir = "."
-	}
+	configDir := getConfigDir()
+	stateDir := getStateDir()
 
 	return &Scheduler{
 		statePath: filepath.Join(stateDir, "scheduler.json"),
@@ -42,15 +35,8 @@ func New() *Scheduler {
 }
 
 func NewWithClient(client opentofu.TofuClient) *Scheduler {
-	stateDir := os.Getenv("PROVISIONER_STATE_DIR")
-	if stateDir == "" {
-		stateDir = "state"
-	}
-
-	configDir := os.Getenv("PROVISIONER_CONFIG_DIR")
-	if configDir == "" {
-		configDir = "."
-	}
+	configDir := getConfigDir()
+	stateDir := getStateDir()
 
 	return &Scheduler{
 		client:    client,
@@ -419,11 +405,25 @@ func (s *Scheduler) hasConfigChanged() bool {
 
 // getEnvironmentLogFile returns the log file path for an environment
 func (s *Scheduler) getEnvironmentLogFile(envName string) string {
-	logDir := os.Getenv("PROVISIONER_LOG_DIR")
-	if logDir == "" {
-		logDir = "/var/log/provisioner"
-	}
+	logDir := getLogDir()
 	return filepath.Join(logDir, fmt.Sprintf("%s.log", envName))
+}
+
+// getLogDir determines the log directory using auto-discovery (same logic as logging package)
+func getLogDir() string {
+	// First check environment variable (explicit override)
+	if logDir := os.Getenv("PROVISIONER_LOG_DIR"); logDir != "" {
+		return logDir
+	}
+
+	// Auto-detect system installation by checking if /var/log/provisioner exists
+	systemLogDir := "/var/log/provisioner"
+	if _, err := os.Stat(systemLogDir); err == nil {
+		return systemLogDir
+	}
+
+	// Fall back to development default
+	return "logs"
 }
 
 // checkEnvironmentForImmediateDeployment checks if an environment should be deployed immediately after config change
@@ -486,6 +486,38 @@ func stripANSIColors(text string) string {
 	// Regex to match ANSI escape sequences
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	return ansiRegex.ReplaceAllString(text, "")
+}
+
+// getConfigDir determines the configuration directory using auto-discovery
+func getConfigDir() string {
+	// First check environment variable (explicit override)
+	if configDir := os.Getenv("PROVISIONER_CONFIG_DIR"); configDir != "" {
+		return configDir
+	}
+
+	// Auto-detect system installation
+	if _, err := os.Stat("/etc/provisioner"); err == nil {
+		return "/etc/provisioner"
+	}
+
+	// Fall back to development default
+	return "."
+}
+
+// getStateDir determines the state directory using auto-discovery
+func getStateDir() string {
+	// First check environment variable (explicit override)
+	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
+		return stateDir
+	}
+
+	// Auto-detect system installation
+	if _, err := os.Stat("/var/lib/provisioner"); err == nil {
+		return "/var/lib/provisioner"
+	}
+
+	// Fall back to development default
+	return "state"
 }
 
 // ManualDeploy deploys a specific environment immediately, bypassing schedule checks

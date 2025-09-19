@@ -25,10 +25,7 @@ var (
 // GetLogger returns the singleton logger instance
 func GetLogger() *Logger {
 	once.Do(func() {
-		logDir := os.Getenv("PROVISIONER_LOG_DIR")
-		if logDir == "" {
-			logDir = "/var/log/provisioner"
-		}
+		logDir := getLogDir()
 
 		defaultLogger = &Logger{
 			// Systemd logger without timestamps (journalctl adds them)
@@ -170,4 +167,26 @@ func ResetSingleton() {
 	}
 	defaultLogger = nil
 	once = sync.Once{}
+}
+
+// getLogDir determines the log directory using auto-discovery
+func getLogDir() string {
+	// First check environment variable (explicit override)
+	if logDir := os.Getenv("PROVISIONER_LOG_DIR"); logDir != "" {
+		return logDir
+	}
+
+	// Auto-detect system installation by checking if /var/log/provisioner exists or can be created
+	systemLogDir := "/var/log/provisioner"
+	if _, err := os.Stat(systemLogDir); err == nil {
+		return systemLogDir
+	}
+
+	// Try to create system log directory (in case this is first run after installation)
+	if err := os.MkdirAll(systemLogDir, 0755); err == nil {
+		return systemLogDir
+	}
+
+	// Fall back to development default
+	return "logs"
 }
