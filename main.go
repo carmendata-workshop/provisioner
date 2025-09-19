@@ -18,6 +18,9 @@ func printUsage() {
 Commands:
   deploy ENVIRONMENT    Deploy specific environment immediately
   destroy ENVIRONMENT   Destroy specific environment immediately
+  status [ENVIRONMENT]  Show status of all environments or specific environment
+  list                  List all configured environments
+  logs ENVIRONMENT      Show recent logs for specific environment
 
 Options:
   --help               Show this help
@@ -29,8 +32,12 @@ If no command is specified, runs the scheduler daemon.
 Examples:
   %s deploy my-app        # Deploy 'my-app' environment immediately
   %s destroy test-env     # Destroy 'test-env' environment immediately
+  %s status               # Show status of all environments
+  %s status my-app        # Show detailed status of 'my-app' environment
+  %s list                 # List all configured environments
+  %s logs my-app          # Show recent logs for 'my-app' environment
   %s                      # Run scheduler daemon (default)
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 }
 
 func main() {
@@ -48,6 +55,55 @@ func main() {
 
 			envName := os.Args[2]
 			if err := runManualOperation(command, envName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle status command (can take optional environment name)
+		if command == "status" {
+			envName := ""
+			if len(os.Args) == 3 {
+				envName = os.Args[2]
+			} else if len(os.Args) > 3 {
+				fmt.Fprintf(os.Stderr, "Error: status command accepts at most one environment name\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			if err := runStatusCommand(envName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle list command (no arguments)
+		if command == "list" {
+			if len(os.Args) != 2 {
+				fmt.Fprintf(os.Stderr, "Error: list command takes no arguments\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			if err := runListCommand(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle logs command (requires environment name)
+		if command == "logs" {
+			if len(os.Args) != 3 {
+				fmt.Fprintf(os.Stderr, "Error: logs command requires exactly one environment name\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			envName := os.Args[2]
+			if err := runLogsCommand(envName); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -137,4 +193,28 @@ func runManualOperation(command, envName string) error {
 	default:
 		return fmt.Errorf("unknown command: %s", command)
 	}
+}
+
+func runStatusCommand(envName string) error {
+	// Initialize scheduler in quiet mode for CLI
+	sched := scheduler.NewQuiet()
+
+	// Use the ShowStatus method
+	return sched.ShowStatus(envName)
+}
+
+func runListCommand() error {
+	// Initialize scheduler in quiet mode for CLI
+	sched := scheduler.NewQuiet()
+
+	// Use the ListEnvironments method
+	return sched.ListEnvironments()
+}
+
+func runLogsCommand(envName string) error {
+	// Initialize scheduler in quiet mode for CLI
+	sched := scheduler.NewQuiet()
+
+	// Use the ShowLogs method
+	return sched.ShowLogs(envName)
 }

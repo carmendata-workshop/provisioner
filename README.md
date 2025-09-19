@@ -17,6 +17,7 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 - **Multiple environments** - Manage multiple environments simultaneously
 - **State persistence** - Environment status survives application restarts
 - **Configuration hot-reload** - Automatically detects changes to config files and templates
+- **CLI monitoring and control** - Status checking, environment listing, log viewing, and manual operations
 - **Mountain-themed naming** - Environment names follow mountain theme (everest, kilimanjaro, etc.)
 - **Automatic OpenTofu management** - Downloads and manages OpenTofu binary automatically
 - **Comprehensive logging** - All operations and state changes are logged
@@ -72,6 +73,14 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
    make run
    # or
    ./bin/provisioner
+   ```
+
+6. **Monitor environments with CLI commands:**
+   ```bash
+   ./bin/provisioner list                    # List all environments
+   ./bin/provisioner status                  # Show environment status
+   ./bin/provisioner deploy example          # Deploy environment manually
+   ./bin/provisioner logs example            # View environment logs
    ```
 
 ## Directory Structure
@@ -492,11 +501,13 @@ All operations are logged with timestamps:
 - State changes and errors
 - Application lifecycle events
 
-## Manual Operations
+## CLI Commands
 
-The provisioner supports immediate deployment and destruction of environments bypassing the CRON schedule:
+The provisioner provides several commands for managing and monitoring environments:
 
-### Deploy Environment
+### Environment Management
+
+**Deploy Environment**
 ```bash
 provisioner deploy my-app
 ```
@@ -505,7 +516,7 @@ provisioner deploy my-app
 - Executes deployment immediately using OpenTofu
 - Updates state and provides detailed logging
 
-### Destroy Environment
+**Destroy Environment**
 ```bash
 provisioner destroy test-env
 ```
@@ -514,11 +525,75 @@ provisioner destroy test-env
 - Executes destruction immediately using OpenTofu
 - Updates state and provides detailed logging
 
+### Environment Monitoring
+
+**Show Environment Status**
+```bash
+provisioner status                  # Show all environments
+provisioner status my-app          # Show specific environment details
+```
+- Displays current status (deployed, destroyed, deploying, destroying)
+- Shows last deployment and destruction timestamps
+- Indicates if there are any errors
+- For specific environments: shows detailed configuration and log file location
+
+**List All Environments**
+```bash
+provisioner list
+```
+- Shows all configured environments with their schedules
+- Displays enabled/disabled status for each environment
+- Shows deploy and destroy CRON schedules
+- Supports both single and multiple schedule formats
+
+**View Environment Logs**
+```bash
+provisioner logs my-app
+```
+- Shows recent logs for the specified environment
+- Displays detailed OpenTofu operation output
+- Includes timestamps and operation types (DEPLOY, DESTROY, MANUAL DEPLOY, etc.)
+- Shows the full log file path for reference
+
+### Command Examples
+
+```bash
+# Check status of all environments
+provisioner status
+# Output:
+# ENVIRONMENT     STATUS       LAST DEPLOYED        LAST DESTROYED       ERRORS
+# -----------     ------       -------------        --------------       ------
+# my-app          deployed     2025-09-19 12:04     Never                None
+# test-env        destroyed    Never                2025-09-19 11:30     None
+
+# Get detailed info about specific environment
+provisioner status my-app
+# Output:
+# Environment: my-app
+# Status: deployed
+# Enabled: true
+# Deploy Schedule: 0 9 * * 1-5
+# Destroy Schedule: 0 18 * * 1-5
+# Last Deployed: 2025-09-19 12:04:33
+# Last Destroyed: Never
+# Log File: /var/log/provisioner/my-app.log
+
+# View recent deployment logs
+provisioner logs my-app
+# Output:
+# === Recent logs for environment 'my-app' ===
+# Log file: /var/log/provisioner/my-app.log
+#
+# 2025/09/19 12:04:33 MANUAL DEPLOY: Starting manual deployment
+# 2025/09/19 12:04:40 MANUAL DEPLOY: Successfully completed
+```
+
 ### Error Handling
 - **Environment not found**: Returns clear error message
 - **Environment disabled**: Returns error, requires enabling in `config.json`
 - **Environment busy**: Returns error if currently deploying/destroying
 - **Operation failures**: Logs detailed errors to environment-specific log files
+- **Invalid arguments**: Shows helpful usage information
 
 ## Limitations (MVP)
 

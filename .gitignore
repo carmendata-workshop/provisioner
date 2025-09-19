@@ -23,6 +23,12 @@ go.work
 *.tar.gz
 *.zip
 
+# Cross-compilation binaries (if built in root by mistake)
+provisioner-*
+*-linux-*
+*-darwin-*
+*-windows-*
+
 # IDE and editor files
 .vscode/
 .idea/

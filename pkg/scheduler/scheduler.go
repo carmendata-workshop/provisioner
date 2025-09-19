@@ -21,6 +21,7 @@ type Scheduler struct {
 	stopChan        chan bool
 	lastConfigCheck time.Time
 	configDir       string
+	quietMode       bool
 }
 
 func New() *Scheduler {
@@ -46,6 +47,19 @@ func NewWithClient(client opentofu.TofuClient) *Scheduler {
 	}
 }
 
+// NewQuiet creates a new scheduler for CLI operations (suppresses verbose loading output)
+func NewQuiet() *Scheduler {
+	configDir := getConfigDir()
+	stateDir := getStateDir()
+
+	return &Scheduler{
+		statePath: filepath.Join(stateDir, "scheduler.json"),
+		stopChan:  make(chan bool),
+		configDir: configDir,
+		quietMode: true,
+	}
+}
+
 func (s *Scheduler) LoadEnvironments() error {
 	environmentsDir := filepath.Join(s.configDir, "environments")
 
@@ -64,18 +78,20 @@ func (s *Scheduler) LoadEnvironments() error {
 		}
 	}
 
-	logging.LogSystemd("Loaded %d environments (%d enabled, %d disabled)", len(s.environments), enabledCount, len(s.environments)-enabledCount)
+	if !s.quietMode {
+		logging.LogSystemd("Loaded %d environments (%d enabled, %d disabled)", len(s.environments), enabledCount, len(s.environments)-enabledCount)
 
-	for _, env := range s.environments {
-		status := "disabled"
-		if env.Config.Enabled {
-			status = "enabled"
+		for _, env := range s.environments {
+			status := "disabled"
+			if env.Config.Enabled {
+				status = "enabled"
+			}
+			logging.LogSystemd("Environment: %s (%s) - deploy: %s, destroy: %s",
+				env.Name,
+				status,
+				env.Config.DeploySchedule,
+				env.Config.DestroySchedule)
 		}
-		logging.LogSystemd("Environment: %s (%s) - deploy: %s, destroy: %s",
-			env.Name,
-			status,
-			env.Config.DeploySchedule,
-			env.Config.DestroySchedule)
 	}
 
 	return nil
@@ -88,7 +104,9 @@ func (s *Scheduler) LoadState() error {
 	}
 
 	s.state = state
-	logging.LogSystemd("State loaded with %d environment records", len(s.state.Environments))
+	if !s.quietMode {
+		logging.LogSystemd("State loaded with %d environment records", len(s.state.Environments))
+	}
 	return nil
 }
 
@@ -676,4 +694,179 @@ func (s *Scheduler) manualDestroyEnvironment(env environment.Environment) {
 		logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Successfully completed")
 		s.state.SetEnvironmentStatus(envName, StatusDestroyed)
 	}
+}
+
+// ShowStatus displays the status of environments
+func (s *Scheduler) ShowStatus(envName string) error {
+	if err := s.LoadEnvironments(); err != nil {
+		return fmt.Errorf("failed to load environments: %w", err)
+	}
+
+	if err := s.LoadState(); err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	if envName != "" {
+		// Show specific environment status
+		env := s.findEnvironment(envName)
+		if env == nil {
+			return fmt.Errorf("environment '%s' not found", envName)
+		}
+		s.printEnvironmentStatus(*env)
+	} else {
+		// Show all environments status
+		fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n", "ENVIRONMENT", "STATUS", "LAST DEPLOYED", "LAST DESTROYED", "ERRORS")
+		fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n", "-----------", "------", "-------------", "--------------", "------")
+
+		for _, env := range s.environments {
+			state := s.state.GetEnvironmentState(env.Name)
+			s.printEnvironmentStatusLine(env, state)
+		}
+	}
+
+	return nil
+}
+
+// ListEnvironments displays all configured environments
+func (s *Scheduler) ListEnvironments() error {
+	if err := s.LoadEnvironments(); err != nil {
+		return fmt.Errorf("failed to load environments: %w", err)
+	}
+
+	fmt.Printf("%-15s %-8s %-30s %-30s\n", "ENVIRONMENT", "ENABLED", "DEPLOY SCHEDULE", "DESTROY SCHEDULE")
+	fmt.Printf("%-15s %-8s %-30s %-30s\n", "-----------", "-------", "---------------", "----------------")
+
+	for _, env := range s.environments {
+		deploySchedules, _ := env.Config.GetDeploySchedules()
+		destroySchedules, _ := env.Config.GetDestroySchedules()
+
+		deploySchedule := formatSchedules(deploySchedules)
+		destroySchedule := formatSchedules(destroySchedules)
+
+		fmt.Printf("%-15s %-8t %-30s %-30s\n",
+			env.Name,
+			env.Config.Enabled,
+			deploySchedule,
+			destroySchedule)
+	}
+
+	return nil
+}
+
+// ShowLogs displays recent logs for an environment
+func (s *Scheduler) ShowLogs(envName string) error {
+	if err := s.LoadEnvironments(); err != nil {
+		return fmt.Errorf("failed to load environments: %w", err)
+	}
+
+	env := s.findEnvironment(envName)
+	if env == nil {
+		return fmt.Errorf("environment '%s' not found", envName)
+	}
+
+	logFile := s.getEnvironmentLogFile(envName)
+
+	// Check if log file exists
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		fmt.Printf("No log file found for environment '%s'\n", envName)
+		fmt.Printf("Expected location: %s\n", logFile)
+		return nil
+	}
+
+	// Read and display the log file
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		return fmt.Errorf("failed to read log file: %w", err)
+	}
+
+	fmt.Printf("=== Recent logs for environment '%s' ===\n", envName)
+	fmt.Printf("Log file: %s\n\n", logFile)
+	fmt.Print(string(data))
+
+	return nil
+}
+
+// Helper methods for CLI commands
+
+func (s *Scheduler) findEnvironment(name string) *environment.Environment {
+	for _, env := range s.environments {
+		if env.Name == name {
+			return &env
+		}
+	}
+	return nil
+}
+
+func (s *Scheduler) printEnvironmentStatus(env environment.Environment) {
+	state := s.state.GetEnvironmentState(env.Name)
+
+	deploySchedules, _ := env.Config.GetDeploySchedules()
+	destroySchedules, _ := env.Config.GetDestroySchedules()
+
+	fmt.Printf("Environment: %s\n", env.Name)
+	fmt.Printf("Status: %s\n", state.Status)
+	fmt.Printf("Enabled: %t\n", env.Config.Enabled)
+	fmt.Printf("Deploy Schedule: %s\n", formatSchedules(deploySchedules))
+	fmt.Printf("Destroy Schedule: %s\n", formatSchedules(destroySchedules))
+
+	if state.LastDeployed != nil {
+		fmt.Printf("Last Deployed: %s\n", state.LastDeployed.Format("2006-01-02 15:04:05"))
+	} else {
+		fmt.Printf("Last Deployed: Never\n")
+	}
+
+	if state.LastDestroyed != nil {
+		fmt.Printf("Last Destroyed: %s\n", state.LastDestroyed.Format("2006-01-02 15:04:05"))
+	} else {
+		fmt.Printf("Last Destroyed: Never\n")
+	}
+
+	if state.LastConfigModified != nil {
+		fmt.Printf("Config Modified: %s\n", state.LastConfigModified.Format("2006-01-02 15:04:05"))
+	}
+
+	if state.LastDeployError != "" {
+		fmt.Printf("Last Deploy Error: %s\n", state.LastDeployError)
+	}
+
+	if state.LastDestroyError != "" {
+		fmt.Printf("Last Destroy Error: %s\n", state.LastDestroyError)
+	}
+
+	logFile := s.getEnvironmentLogFile(env.Name)
+	fmt.Printf("Log File: %s\n", logFile)
+}
+
+func (s *Scheduler) printEnvironmentStatusLine(env environment.Environment, state *EnvironmentState) {
+	lastDeployed := "Never"
+	if state.LastDeployed != nil {
+		lastDeployed = state.LastDeployed.Format("2006-01-02 15:04")
+	}
+
+	lastDestroyed := "Never"
+	if state.LastDestroyed != nil {
+		lastDestroyed = state.LastDestroyed.Format("2006-01-02 15:04")
+	}
+
+	errors := "None"
+	if state.LastDeployError != "" || state.LastDestroyError != "" {
+		errors = "Yes"
+	}
+
+	fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n",
+		env.Name,
+		string(state.Status),
+		lastDeployed,
+		lastDestroyed,
+		errors)
+}
+
+func formatSchedules(schedules []string) string {
+	if len(schedules) == 0 {
+		return "None"
+	}
+	if len(schedules) == 1 {
+		return schedules[0]
+	}
+	return fmt.Sprintf("[%s]", strings.Join(schedules, ", "))
 }
