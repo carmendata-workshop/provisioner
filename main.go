@@ -171,8 +171,8 @@ func main() {
 }
 
 func runManualOperation(command, envName string) error {
-	// Initialize scheduler
-	sched := scheduler.New()
+	// Initialize scheduler in quiet mode for CLI
+	sched := scheduler.NewQuiet()
 
 	// Load environments to validate the specified environment exists
 	if err := sched.LoadEnvironments(); err != nil {
