@@ -259,32 +259,6 @@ func shouldSkipFile(relPath string) bool {
 	return false
 }
 
-func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(dst, relPath)
-
-		if info.IsDir() {
-			return os.MkdirAll(dstPath, info.Mode())
-		}
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		return os.WriteFile(dstPath, data, info.Mode())
-	})
-}
-
 // getStateDir determines the state directory using auto-discovery
 func getStateDir() string {
 	// First check environment variable (explicit override)
