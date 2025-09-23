@@ -25,9 +25,9 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 
 ## Quick Start
 
-1. **Build the application:**
+1. **Build the applications:**
    ```bash
-   go build -o provisioner
+   make build
    ```
 
 2. **Create an environment:**
@@ -75,16 +75,17 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
    ./bin/provisioner
    ```
 
-6. **Monitor environments with CLI commands:**
+6. **Monitor and manage with CLI tools:**
    ```bash
-   ./bin/provisioner list                    # List all environments
-   ./bin/provisioner status                  # Show environment status
-   ./bin/provisioner deploy example          # Deploy environment manually
-   ./bin/provisioner logs example            # View environment logs
+   # Environment management
+   ./bin/environmentctl list                    # List all environments
+   ./bin/environmentctl status                  # Show environment status
+   ./bin/environmentctl deploy example          # Deploy environment manually
+   ./bin/environmentctl logs example            # View environment logs
 
    # Template management
-   ./bin/provisioner template list           # List all templates
-   ./bin/provisioner template add web-app https://github.com/org/templates --path web --ref v1.0
+   ./bin/templatectl list                       # List all templates
+   ./bin/templatectl add web-app https://github.com/org/templates --path web --ref v1.0
    ```
 
 ## Directory Structure
@@ -266,13 +267,13 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 
 ```bash
 # Add a web application template from GitHub
-provisioner template add web-app https://github.com/company/infra-templates --path templates/web-app --ref v1.2.0 --description "Standard web application template"
+templatectl add web-app https://github.com/company/infra-templates --path templates/web-app --ref v1.2.0 --description "Standard web application template"
 
 # Add a database template
-provisioner template add postgres-db https://github.com/company/infra-templates --path templates/postgres --ref main --description "PostgreSQL database template"
+templatectl add postgres-db https://github.com/company/infra-templates --path templates/postgres --ref main --description "PostgreSQL database template"
 
 # List available templates
-provisioner template list
+templatectl list
 # Output:
 # NAME         SOURCE                                   REF    DESCRIPTION
 # web-app      https://github.com/company/infra-templates  v1.2.0  Standard web application template
@@ -288,7 +289,7 @@ provisioner template list
 }
 
 # Update templates (checks for changes and updates environments on next deployment)
-provisioner template update web-app
+templatectl update web-app
 ```
 
 ## Example Environments
@@ -602,39 +603,39 @@ The provisioner includes a comprehensive template management system for sharing 
 **Add Template:**
 ```bash
 # Add template from GitHub repository
-provisioner template add web-app https://github.com/org/terraform-templates --path environments/web-app --ref v2.1.0
+templatectl add web-app https://github.com/org/terraform-templates --path environments/web-app --ref v2.1.0
 
 # Add with description
-provisioner template add database https://github.com/company/infra-templates --path db/postgres --ref main --description "PostgreSQL database template"
+templatectl add database https://github.com/company/infra-templates --path db/postgres --ref main --description "PostgreSQL database template"
 ```
 
 **List Templates:**
 ```bash
-provisioner template list                    # Basic list
-provisioner template list --detailed         # Detailed information
+templatectl list                    # Basic list
+templatectl list --detailed         # Detailed information
 ```
 
 **Show Template Details:**
 ```bash
-provisioner template show web-app
+templatectl show web-app
 ```
 
 **Update Templates:**
 ```bash
-provisioner template update web-app          # Update specific template
-provisioner template update --all            # Update all templates
+templatectl update web-app          # Update specific template
+templatectl update --all            # Update all templates
 ```
 
 **Validate Templates:**
 ```bash
-provisioner template validate web-app        # Validate specific template
-provisioner template validate --all          # Validate all templates
+templatectl validate web-app        # Validate specific template
+templatectl validate --all          # Validate all templates
 ```
 
 **Remove Templates:**
 ```bash
-provisioner template remove web-app          # Interactive confirmation
-provisioner template remove web-app --force  # Skip confirmation
+templatectl remove web-app          # Interactive confirmation
+templatectl remove web-app --force  # Skip confirmation
 ```
 
 ### Template Storage Structure
@@ -680,7 +681,7 @@ The template registry (`registry.json`) tracks metadata:
 **When a template is updated:**
 - **Currently deployed environments**: Continue running with current template version (stable)
 - **Next scheduled deployment**: Automatically uses updated template
-- **Manual deployment**: `provisioner deploy env-name` forces immediate template update
+- **Manual deployment**: `environmentctl deploy env-name` forces immediate template update
 - **Change detection**: Only real content changes trigger environment updates
 
 **Template Resolution Priority:**
@@ -717,7 +718,7 @@ The provisioner provides several commands for managing and monitoring environmen
 
 **Deploy Environment**
 ```bash
-provisioner deploy my-app
+environmentctl deploy my-app
 ```
 - Validates environment exists and is enabled
 - Checks environment is not currently deploying/destroying
@@ -726,7 +727,7 @@ provisioner deploy my-app
 
 **Destroy Environment**
 ```bash
-provisioner destroy test-env
+environmentctl destroy test-env
 ```
 - Validates environment exists and is enabled
 - Checks environment is not currently deploying/destroying
@@ -737,8 +738,8 @@ provisioner destroy test-env
 
 **Show Environment Status**
 ```bash
-provisioner status                  # Show all environments
-provisioner status my-app          # Show specific environment details
+environmentctl status                  # Show all environments
+environmentctl status my-app          # Show specific environment details
 ```
 - Displays current status (deployed, destroyed, deploying, destroying)
 - Shows last deployment and destruction timestamps
@@ -747,7 +748,7 @@ provisioner status my-app          # Show specific environment details
 
 **List All Environments**
 ```bash
-provisioner list
+environmentctl list
 ```
 - Shows all configured environments with their schedules
 - Displays enabled/disabled status for each environment
@@ -756,7 +757,7 @@ provisioner list
 
 **View Environment Logs**
 ```bash
-provisioner logs my-app
+environmentctl logs my-app
 ```
 - Shows recent logs for the specified environment
 - Displays detailed OpenTofu operation output
@@ -767,7 +768,7 @@ provisioner logs my-app
 
 ```bash
 # Check status of all environments
-provisioner status
+environmentctl status
 # Output:
 # ENVIRONMENT     STATUS       LAST DEPLOYED        LAST DESTROYED       ERRORS
 # -----------     ------       -------------        --------------       ------
@@ -775,7 +776,7 @@ provisioner status
 # test-env        destroyed    Never                2025-09-19 11:30     None
 
 # Get detailed info about specific environment
-provisioner status my-app
+environmentctl status my-app
 # Output:
 # Environment: my-app
 # Status: deployed
@@ -787,7 +788,7 @@ provisioner status my-app
 # Log File: /var/log/provisioner/my-app.log
 
 # View recent deployment logs
-provisioner logs my-app
+environmentctl logs my-app
 # Output:
 # === Recent logs for environment 'my-app' ===
 # Log file: /var/log/provisioner/my-app.log

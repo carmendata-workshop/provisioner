@@ -41,21 +41,26 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 cd "$TEMP_DIR"
 
-# Download release
+# Download all binaries
+BINARIES="provisioner environmentctl templatectl"
 if [ "$VERSION" = "latest" ]; then
     echo "🔍 Finding latest release..."
-    DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/provisioner-${OS}-${ARCH}"
+    BASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download"
 else
     echo "🔍 Downloading version ${VERSION}..."
-    DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/provisioner-${OS}-${ARCH}"
+    BASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}"
 fi
 
-echo "⬇️  Downloading binary..."
-if ! curl -fsSL "$DOWNLOAD_URL" -o provisioner; then
-    echo "❌ Failed to download binary from: $DOWNLOAD_URL"
-    echo "   Make sure the release exists and contains provisioner-${OS}-${ARCH}"
-    exit 1
-fi
+echo "⬇️  Downloading binaries..."
+for binary in $BINARIES; do
+    DOWNLOAD_URL="${BASE_URL}/${binary}-${OS}-${ARCH}"
+    echo "  Downloading ${binary}..."
+    if ! curl -fsSL "$DOWNLOAD_URL" -o "$binary"; then
+        echo "❌ Failed to download ${binary} from: $DOWNLOAD_URL"
+        echo "   Make sure the release exists and contains ${binary}-${OS}-${ARCH}"
+        exit 1
+    fi
+done
 
 # Create user if doesn't exist
 if ! id "$USER_NAME" &>/dev/null; then
@@ -82,36 +87,32 @@ if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     fi
 fi
 
-# Install binary
-echo "📋 Installing binary..."
-if [ -f "bin/provisioner" ]; then
-    if cp bin/provisioner "$INSTALL_DIR/"; then
-        echo "✅ Binary installed successfully"
+# Install binaries
+echo "📋 Installing binaries..."
+for binary in $BINARIES; do
+    if [ -f "$binary" ]; then
+        if cp "$binary" "$INSTALL_DIR/"; then
+            echo "✅ ${binary} installed successfully"
+        else
+            echo "❌ Failed to copy ${binary}"
+            exit 1
+        fi
+        chmod +x "$INSTALL_DIR/$binary"
     else
-        echo "❌ Failed to copy binary from bin/provisioner"
+        echo "❌ Binary not found: $binary"
         exit 1
     fi
-elif [ -f "provisioner" ]; then
-    if cp provisioner "$INSTALL_DIR/"; then
-        echo "✅ Binary installed successfully"
-    else
-        echo "❌ Failed to copy binary from provisioner"
-        exit 1
-    fi
-else
-    echo "❌ Binary not found. Expected 'provisioner' or 'bin/provisioner'"
-    exit 1
-fi
-chmod +x "$INSTALL_DIR/provisioner"
+done
 
-# Create symlink in /usr/local/bin for system-wide access
+# Create symlinks in /usr/local/bin for system-wide access
 echo "🔗 Creating system-wide command access..."
-if ln -sf "$INSTALL_DIR/provisioner" /usr/local/bin/provisioner; then
-    echo "✅ Created symlink: /usr/local/bin/provisioner -> $INSTALL_DIR/provisioner"
-else
-    echo "⚠️  Warning: Failed to create symlink in /usr/local/bin"
-    echo "   You can manually add $INSTALL_DIR to your PATH or create the symlink later"
-fi
+for binary in $BINARIES; do
+    if ln -sf "$INSTALL_DIR/$binary" "/usr/local/bin/$binary"; then
+        echo "✅ Created symlink: /usr/local/bin/$binary -> $INSTALL_DIR/$binary"
+    else
+        echo "⚠️  Warning: Failed to create symlink for $binary in /usr/local/bin"
+    fi
+done
 
 # Create example environment
 echo "📋 Creating example environment..."
@@ -170,7 +171,7 @@ else
     echo "✅ Installation complete! Service has been started."
 fi
 echo ""
-echo "📁 Binary: $INSTALL_DIR/provisioner"
+echo "📁 Binaries: $INSTALL_DIR/"
 echo "📝 Example environment created (disabled): $CONFIG_DIR/environments/example/"
 echo ""
 echo "Next steps:"
@@ -187,12 +188,18 @@ echo "  sudo systemctl restart $SERVICE_NAME"
 echo "  sudo systemctl status $SERVICE_NAME"
 echo ""
 echo "🔧 File locations (FHS compliant):"
-echo "  - Binary: $INSTALL_DIR/"
+echo "  - Binaries: $INSTALL_DIR/"
 echo "  - Configuration: $CONFIG_DIR/"
 echo "  - State data: $STATE_DIR/"
 echo "  - Log files: $LOG_DIR/"
 echo "  - System logs: journalctl -u $SERVICE_NAME"
 echo ""
-echo "💻 Command access:"
-echo "  - System-wide: provisioner --help"
-echo "  - Direct path: $INSTALL_DIR/provisioner --help"
+echo "💻 Available commands:"
+echo "  - provisioner --help        # Scheduler daemon"
+echo "  - environmentctl --help     # Environment management"
+echo "  - templatectl --help        # Template management"
+echo ""
+echo "📖 Quick examples:"
+echo "  environmentctl list                    # List environments"
+echo "  environmentctl deploy my-app          # Deploy immediately"
+echo "  templatectl list                      # List templates"

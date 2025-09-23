@@ -171,25 +171,30 @@ jobs:
       with:
         go-version: '1.25.1'
 
-    - name: Build binary
+    - name: Build binaries
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         VERSION: ${{ needs.check-version.outputs.new-version }}
       run: |
         mkdir -p bin
-        CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags " \
-          -X provisioner/pkg/version.Version=${{ needs.check-version.outputs.new-version }} \
+        LDFLAGS="-X provisioner/pkg/version.Version=${{ needs.check-version.outputs.new-version }} \
           -X provisioner/pkg/version.GitCommit=$(git rev-parse --short HEAD) \
           -X provisioner/pkg/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-          -w -s" \
-          -o bin/provisioner-${{ matrix.os }}-${{ matrix.arch }} .
+          -w -s"
 
-    - name: Upload binary artifact
+        # Build all three binaries
+        for binary in provisioner environmentctl templatectl; do
+          echo "Building $binary for ${{ matrix.os }}-${{ matrix.arch }}"
+          CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags "$LDFLAGS" \
+            -o bin/${binary}-${{ matrix.os }}-${{ matrix.arch }} ./cmd/${binary}
+        done
+
+    - name: Upload binary artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: provisioner-${{ matrix.os }}-${{ matrix.arch }}
-        path: bin/provisioner-${{ matrix.os }}-${{ matrix.arch }}
+        name: binaries-${{ matrix.os }}-${{ matrix.arch }}
+        path: bin/*-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     needs: [check-version, build]
@@ -233,10 +238,11 @@ jobs:
       run: |
         echo "Available files:"
         ls -la
-        echo "Looking for provisioner binaries:"
-        find . -name "provisioner-*" -type f
+        echo "Looking for all binaries:"
+        find . -name "*-linux-*" -o -name "*-darwin-*" -type f
 
-        for file in provisioner-*; do
+        # Upload all binary files
+        for file in provisioner-* environmentctl-* templatectl-*; do
           if [ -f "$file" ]; then
             echo "Uploading $file"
             gh release upload ${{ needs.check-version.outputs.new-version }} "$file"
