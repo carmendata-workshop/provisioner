@@ -174,10 +174,11 @@ func TestEnvironmentHasMainTF(t *testing.T) {
 
 func TestConfigMultipleSchedules(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         Config
-		expectedDeploy []string
-		expectError    bool
+		name            string
+		config          Config
+		expectedDeploy  []string
+		expectedDestroy []string
+		expectError     bool
 	}{
 		{
 			name: "single string schedule",
@@ -185,8 +186,9 @@ func TestConfigMultipleSchedules(t *testing.T) {
 				DeploySchedule:  "0 9 * * 1-5",
 				DestroySchedule: "0 17 * * 1-5",
 			},
-			expectedDeploy: []string{"0 9 * * 1-5"},
-			expectError:    false,
+			expectedDeploy:  []string{"0 9 * * 1-5"},
+			expectedDestroy: []string{"0 17 * * 1-5"},
+			expectError:     false,
 		},
 		{
 			name: "multiple string schedules",
@@ -194,8 +196,9 @@ func TestConfigMultipleSchedules(t *testing.T) {
 				DeploySchedule:  []string{"0 7 * * 1,3,5", "0 8 * * 2,4"},
 				DestroySchedule: "0 17 * * 1-5",
 			},
-			expectedDeploy: []string{"0 7 * * 1,3,5", "0 8 * * 2,4"},
-			expectError:    false,
+			expectedDeploy:  []string{"0 7 * * 1,3,5", "0 8 * * 2,4"},
+			expectedDestroy: []string{"0 17 * * 1-5"},
+			expectError:     false,
 		},
 		{
 			name: "mixed interface array",
@@ -203,8 +206,9 @@ func TestConfigMultipleSchedules(t *testing.T) {
 				DeploySchedule:  []interface{}{"0 6 * * 1-5", "0 14 * * 1-5"},
 				DestroySchedule: "0 18 * * 1-5",
 			},
-			expectedDeploy: []string{"0 6 * * 1-5", "0 14 * * 1-5"},
-			expectError:    false,
+			expectedDeploy:  []string{"0 6 * * 1-5", "0 14 * * 1-5"},
+			expectedDestroy: []string{"0 18 * * 1-5"},
+			expectError:     false,
 		},
 		{
 			name: "invalid type in array",
@@ -233,32 +237,68 @@ func TestConfigMultipleSchedules(t *testing.T) {
 			expectedDeploy: nil,
 			expectError:    true,
 		},
+		{
+			name: "permanent deployment (destroy_schedule: false)",
+			config: Config{
+				DeploySchedule:  "0 9 * * 1-5",
+				DestroySchedule: false,
+			},
+			expectedDeploy:  []string{"0 9 * * 1-5"},
+			expectedDestroy: []string{}, // Empty slice for permanent
+			expectError:     false,
+		},
+		{
+			name: "invalid boolean true for destroy schedule",
+			config: Config{
+				DeploySchedule:  "0 9 * * 1-5",
+				DestroySchedule: true,
+			},
+			expectedDeploy: []string{"0 9 * * 1-5"},
+			expectError:    true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			deploySchedules, err := tt.config.GetDeploySchedules()
+			deploySchedules, deployErr := tt.config.GetDeploySchedules()
+			destroySchedules, destroyErr := tt.config.GetDestroySchedules()
 
 			if tt.expectError {
-				if err == nil {
+				if deployErr == nil && destroyErr == nil {
 					t.Errorf("expected error but got none")
 				}
 				return
 			}
 
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
+			if deployErr != nil {
+				t.Errorf("unexpected deploy error: %v", deployErr)
+				return
+			}
+
+			if destroyErr != nil {
+				t.Errorf("unexpected destroy error: %v", destroyErr)
 				return
 			}
 
 			if len(deploySchedules) != len(tt.expectedDeploy) {
-				t.Errorf("expected %d schedules, got %d", len(tt.expectedDeploy), len(deploySchedules))
+				t.Errorf("expected %d deploy schedules, got %d", len(tt.expectedDeploy), len(deploySchedules))
+				return
+			}
+
+			if len(destroySchedules) != len(tt.expectedDestroy) {
+				t.Errorf("expected %d destroy schedules, got %d", len(tt.expectedDestroy), len(destroySchedules))
 				return
 			}
 
 			for i, expected := range tt.expectedDeploy {
 				if deploySchedules[i] != expected {
-					t.Errorf("expected schedule[%d] = '%s', got '%s'", i, expected, deploySchedules[i])
+					t.Errorf("expected deploy schedule[%d] = '%s', got '%s'", i, expected, deploySchedules[i])
+				}
+			}
+
+			for i, expected := range tt.expectedDestroy {
+				if destroySchedules[i] != expected {
+					t.Errorf("expected destroy schedule[%d] = '%s', got '%s'", i, expected, destroySchedules[i])
 				}
 			}
 		})

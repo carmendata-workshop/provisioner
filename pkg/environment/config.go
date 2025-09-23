@@ -99,6 +99,11 @@ func normalizeScheduleField(field interface{}) ([]string, error) {
 	}
 
 	switch v := field.(type) {
+	case bool:
+		if !v { // false means permanent deployment (no schedule)
+			return []string{}, nil // Empty slice = no schedules
+		}
+		return nil, fmt.Errorf("schedule boolean must be false (true is invalid)")
 	case string:
 		return []string{v}, nil
 	case []interface{}:
@@ -114,6 +119,6 @@ func normalizeScheduleField(field interface{}) ([]string, error) {
 	case []string:
 		return v, nil
 	default:
-		return nil, fmt.Errorf("schedule must be string or array of strings, got %T", v)
+		return nil, fmt.Errorf("schedule must be false, string, or array of strings, got %T", v)
 	}
 }

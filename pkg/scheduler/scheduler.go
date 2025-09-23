@@ -86,11 +86,15 @@ func (s *Scheduler) LoadEnvironments() error {
 			if env.Config.Enabled {
 				status = "enabled"
 			}
+
+			deploySchedules, _ := env.Config.GetDeploySchedules()
+			destroySchedules, _ := env.Config.GetDestroySchedules()
+
 			logging.LogSystemd("Environment: %s (%s) - deploy: %s, destroy: %s",
 				env.Name,
 				status,
-				env.Config.DeploySchedule,
-				env.Config.DestroySchedule)
+				formatSchedules(deploySchedules),
+				formatSchedules(destroySchedules))
 		}
 	}
 
@@ -199,6 +203,9 @@ func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now t
 	destroySchedules, err := env.Config.GetDestroySchedules()
 	if err != nil {
 		logging.LogEnvironment(env.Name, "Invalid destroy schedule: %v", err)
+	} else if len(destroySchedules) == 0 {
+		// Permanent deployment - no destroy schedules (destroy_schedule: false)
+		// Log only in verbose mode to avoid spam
 	} else if s.ShouldRunDestroySchedule(destroySchedules, now, envState) {
 		logging.LogEnvironment(env.Name, "Triggering destruction")
 		go s.destroyEnvironment(env)
@@ -862,7 +869,7 @@ func (s *Scheduler) printEnvironmentStatusLine(env environment.Environment, stat
 
 func formatSchedules(schedules []string) string {
 	if len(schedules) == 0 {
-		return "None"
+		return "Permanent"
 	}
 	if len(schedules) == 1 {
 		return schedules[0]

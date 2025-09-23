@@ -132,17 +132,31 @@ Both `deploy_schedule` and `destroy_schedule` can accept either a single CRON ex
 }
 ```
 
+**Permanent Deployments:**
+Set `destroy_schedule` to `false` for environments that should never be automatically destroyed:
+
+```json
+{
+  "name": "permanent-env",
+  "enabled": true,
+  "deploy_schedule": "0 6 * * 1",
+  "destroy_schedule": false,
+  "description": "Permanent deployment - never destroyed"
+}
+```
+
 **Field descriptions:**
 - `name` - Environment identifier (must match directory name)
 - `enabled` - Whether environment should be processed by scheduler
 - `deploy_schedule` - CRON expression(s) for deployment times (string or array of strings)
-- `destroy_schedule` - CRON expression(s) for destruction times (string or array of strings)
+- `destroy_schedule` - CRON expression(s) for destruction times (string, array of strings, or `false` for permanent)
 - `description` - Human-readable description
 
 **Schedule Behavior:**
 - **Single schedule**: Environment deploys/destroys at the specified time
 - **Multiple schedules**: Environment deploys/destroys when ANY of the schedules match
 - **Mixed formats**: Can mix single and multiple schedules (e.g., multiple deploy schedules with single destroy schedule)
+- **Permanent deployment**: Use `destroy_schedule: false` to never automatically destroy
 
 ### main.tf
 Standard OpenTofu/Terraform configuration file with your infrastructure definition.
@@ -270,6 +284,17 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
   "deploy_schedule": "30 8 * * 2,4",
   "destroy_schedule": "30 16 * * 2,4",
   "description": "Training environment - Tue/Thu 8:30am-4:30pm"
+}
+```
+
+### Permanent Environment (Never Destroyed)
+```json
+{
+  "name": "production",
+  "enabled": true,
+  "deploy_schedule": "0 6 * * 1",
+  "destroy_schedule": false,
+  "description": "Production environment - permanent deployment"
 }
 ```
 
