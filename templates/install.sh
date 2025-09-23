@@ -68,6 +68,15 @@ if ! id "$USER_NAME" &>/dev/null; then
     useradd --system --home-dir /var/lib/"$USER_NAME" --shell /bin/false "$USER_NAME"
 fi
 
+# Detect if this is a fresh install or update
+FRESH_INSTALL=false
+if [ ! -f "$INSTALL_DIR/provisioner" ] && [ ! -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
+    FRESH_INSTALL=true
+    echo "🆕 Detected fresh installation..."
+else
+    echo "🔄 Detected existing installation - performing update..."
+fi
+
 # Create directories following FHS standards
 echo "📁 Creating directories..."
 mkdir -p "$INSTALL_DIR"              # /opt/provisioner - binary
@@ -114,17 +123,28 @@ for binary in $BINARIES; do
     fi
 done
 
-# Create example environment
-echo "📋 Creating example environment..."
-mkdir -p "$CONFIG_DIR/environments/example"
+# Create example environment (only on fresh install or if no environments exist)
+if [ "$FRESH_INSTALL" = true ] || [ ! -d "$CONFIG_DIR/environments/example" ]; then
+    # Check if ANY environments exist
+    ENV_COUNT=$(find "$CONFIG_DIR/environments" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
 
-cat > "$CONFIG_DIR/environments/example/config.json" << 'EOF'
+    if [ "$ENV_COUNT" -eq 0 ]; then
+        echo "📋 Creating example environment (no environments found)..."
+        mkdir -p "$CONFIG_DIR/environments/example"
+
+        cat > "$CONFIG_DIR/environments/example/config.json" << 'EOF'
 {{EXAMPLE_CONFIG_JSON}}
 EOF
 
-cat > "$CONFIG_DIR/environments/example/main.tf" << 'EOF'
+        cat > "$CONFIG_DIR/environments/example/main.tf" << 'EOF'
 {{EXAMPLE_MAIN_TF}}
 EOF
+    else
+        echo "📋 Skipping example environment (environments already exist)..."
+    fi
+else
+    echo "📋 Skipping example environment (preserving existing configuration)..."
+fi
 
 # Set ownership and permissions
 echo "🔐 Setting ownership and permissions..."
@@ -166,20 +186,32 @@ systemctl status "$SERVICE_NAME" --no-pager -l
 
 echo ""
 if [ "$SERVICE_WAS_RUNNING" = true ]; then
-    echo "✅ Update complete! Service has been restarted with the new binary."
+    echo "✅ Update complete! Service has been restarted with the new binaries."
+elif [ "$FRESH_INSTALL" = true ]; then
+    echo "✅ Fresh installation complete! Service has been started."
 else
     echo "✅ Installation complete! Service has been started."
 fi
 echo ""
 echo "📁 Binaries: $INSTALL_DIR/"
-echo "📝 Example environment created (disabled): $CONFIG_DIR/environments/example/"
-echo ""
-echo "Next steps:"
-echo "1. Review and configure environments in $CONFIG_DIR/environments/"
-echo "2. Enable example environment: edit config.json and set 'enabled': true"
-echo "3. Restart service to pick up changes: sudo systemctl restart $SERVICE_NAME"
-echo "4. Check status: sudo systemctl status $SERVICE_NAME"
-echo "5. View logs: sudo journalctl -u $SERVICE_NAME -f"
+
+# Only mention example environment if it was created
+if [ "$ENV_COUNT" -eq 0 ] && [ "$FRESH_INSTALL" = true ]; then
+    echo "📝 Example environment created (disabled): $CONFIG_DIR/environments/example/"
+    echo ""
+    echo "Next steps:"
+    echo "1. Review the example environment in $CONFIG_DIR/environments/example/"
+    echo "2. Enable it by editing config.json and setting 'enabled': true"
+    echo "3. Create your own environments in $CONFIG_DIR/environments/"
+    echo "4. Restart service to pick up changes: sudo systemctl restart $SERVICE_NAME"
+    echo "5. View logs: sudo journalctl -u $SERVICE_NAME -f"
+else
+    echo ""
+    echo "Next steps:"
+    echo "1. Check your environments: environmentctl list"
+    echo "2. View service logs: sudo journalctl -u $SERVICE_NAME -f"
+    echo "3. Check service status: sudo systemctl status $SERVICE_NAME"
+fi
 echo ""
 echo "Service management commands:"
 echo "  sudo systemctl start $SERVICE_NAME"
