@@ -203,3 +203,193 @@ func normalizeScheduleField(field interface{}) ([]string, error) {
 		return nil, fmt.Errorf("schedule must be false, string, or array of strings, got %T", v)
 	}
 }
+
+// getDefaultEnvironmentsDir returns the default environments directory
+func getDefaultEnvironmentsDir() string {
+	if envDir := os.Getenv("PROVISIONER_ENVIRONMENTS_DIR"); envDir != "" {
+		return envDir
+	}
+	return "environments"
+}
+
+// CreateEnvironment creates a new environment with the given configuration
+func CreateEnvironment(name, template, description, deploySchedule, destroySchedule string, enabled bool) error {
+	environmentsDir := getDefaultEnvironmentsDir()
+	envPath := filepath.Join(environmentsDir, name)
+
+	// Check if environment already exists
+	if _, err := os.Stat(envPath); err == nil {
+		return fmt.Errorf("environment '%s' already exists", name)
+	}
+
+	// Create environment directory
+	if err := os.MkdirAll(envPath, 0755); err != nil {
+		return fmt.Errorf("failed to create environment directory: %w", err)
+	}
+
+	// Create config
+	config := Config{
+		Enabled:     enabled,
+		Template:    template,
+		Description: description,
+	}
+
+	// Set schedules
+	if deploySchedule != "" {
+		config.DeploySchedule = deploySchedule
+	}
+	if destroySchedule != "" {
+		config.DestroySchedule = destroySchedule
+	}
+
+	// Write config.json
+	configPath := filepath.Join(envPath, "config.json")
+	configData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, configData, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Create main.tf if no template specified
+	if template == "" {
+		mainTFPath := filepath.Join(envPath, "main.tf")
+		mainTFContent := `# OpenTofu configuration for environment: ` + name + `
+# Add your infrastructure configuration here
+
+terraform {
+  required_providers {
+    # Add required providers here
+  }
+}
+
+# Add your resources here
+`
+		if err := os.WriteFile(mainTFPath, []byte(mainTFContent), 0644); err != nil {
+			return fmt.Errorf("failed to create main.tf: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// UpdateEnvironment updates an existing environment configuration
+func UpdateEnvironment(name, template, description, deploySchedule, destroySchedule string, enabled *bool) error {
+	environmentsDir := getDefaultEnvironmentsDir()
+	envPath := filepath.Join(environmentsDir, name)
+	configPath := filepath.Join(envPath, "config.json")
+
+	// Check if environment exists
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		return fmt.Errorf("environment '%s' does not exist", name)
+	}
+
+	// Load existing config
+	config, err := loadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load existing config: %w", err)
+	}
+
+	// Update fields if provided
+	if template != "" {
+		config.Template = template
+	}
+	if description != "" {
+		config.Description = description
+	}
+	if deploySchedule != "" {
+		config.DeploySchedule = deploySchedule
+	}
+	if destroySchedule != "" {
+		config.DestroySchedule = destroySchedule
+	}
+	if enabled != nil {
+		config.Enabled = *enabled
+	}
+
+	// Write updated config
+	configData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, configData, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveEnvironment removes an environment and its directory
+func RemoveEnvironment(name string) error {
+	environmentsDir := getDefaultEnvironmentsDir()
+	envPath := filepath.Join(environmentsDir, name)
+
+	// Check if environment exists
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		return fmt.Errorf("environment '%s' does not exist", name)
+	}
+
+	// Remove the entire environment directory
+	if err := os.RemoveAll(envPath); err != nil {
+		return fmt.Errorf("failed to remove environment directory: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateEnvironment validates an environment's configuration and OpenTofu syntax
+func ValidateEnvironment(name string) error {
+	environmentsDir := getDefaultEnvironmentsDir()
+	envPath := filepath.Join(environmentsDir, name)
+	configPath := filepath.Join(envPath, "config.json")
+
+	// Check if environment exists
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		return fmt.Errorf("environment does not exist")
+	}
+
+	// Load and validate config
+	config, err := loadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	// Create environment object for validation
+	env := Environment{
+		Name:   name,
+		Config: config,
+		Path:   envPath,
+	}
+
+	// Validate that environment has a valid OpenTofu configuration
+	if !env.HasMainTF() {
+		return fmt.Errorf("no valid OpenTofu configuration found (missing main.tf)")
+	}
+
+	// Validate schedules
+	if config.DeploySchedule != nil {
+		if _, err := config.GetDeploySchedules(); err != nil {
+			return fmt.Errorf("invalid deploy schedule: %w", err)
+		}
+	}
+
+	if config.DestroySchedule != nil {
+		if _, err := config.GetDestroySchedules(); err != nil {
+			return fmt.Errorf("invalid destroy schedule: %w", err)
+		}
+	}
+
+	// Validate template reference if specified
+	if config.Template != "" {
+		templatesDir := getTemplatesDir()
+		templatePath := filepath.Join(templatesDir, config.Template)
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			return fmt.Errorf("referenced template '%s' does not exist", config.Template)
+		}
+	}
+
+	return nil
+}

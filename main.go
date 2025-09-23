@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"provisioner/pkg/environment"
 	"provisioner/pkg/logging"
 	"provisioner/pkg/scheduler"
 	"provisioner/pkg/template"
@@ -17,12 +18,13 @@ func printUsage() {
 	fmt.Printf(`Usage: %s [COMMAND] [ARGUMENTS...]
 
 Commands:
-  deploy ENVIRONMENT    Deploy specific environment immediately
-  destroy ENVIRONMENT   Destroy specific environment immediately
-  status [ENVIRONMENT]  Show status of all environments or specific environment
-  list                  List all configured environments
-  logs ENVIRONMENT      Show recent logs for specific environment
-  template SUBCOMMAND   Manage templates
+  deploy ENVIRONMENT     Deploy specific environment immediately
+  destroy ENVIRONMENT    Destroy specific environment immediately
+  status [ENVIRONMENT]   Show status of all environments or specific environment
+  list                   List all configured environments
+  logs ENVIRONMENT       Show recent logs for specific environment
+  template SUBCOMMAND    Manage templates
+  environment SUBCOMMAND Manage environments
 
 Template Commands:
   template add NAME URL [--path PATH] [--ref REF] [--description DESC]
@@ -31,6 +33,14 @@ Template Commands:
   template update NAME | --all
   template remove NAME [--force]
   template validate NAME | --all
+
+Environment Commands:
+  environment add NAME [--template TEMPLATE] [--description DESC] [--deploy-schedule CRON] [--destroy-schedule CRON] [--disabled]
+  environment list [--detailed]
+  environment show NAME
+  environment update NAME [--template TEMPLATE] [--description DESC] [--deploy-schedule CRON] [--destroy-schedule CRON] [--enable/--disable]
+  environment remove NAME [--force]
+  environment validate NAME | --all
 
 Options:
   --help               Show this help
@@ -48,8 +58,10 @@ Examples:
   %s logs my-app          # Show recent logs for 'my-app' environment
   %s template add web-app https://github.com/org/templates --path web --ref v1.0
   %s template list        # List all templates
+  %s environment add dev-server --template web-app --deploy-schedule "0 9 * * 1-5" --destroy-schedule "0 18 * * 1-5"
+  %s environment list     # List all environments
   %s                      # Run scheduler daemon (default)
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 }
 
 func main() {
@@ -125,6 +137,15 @@ func main() {
 		// Handle template command
 		if command == "template" {
 			if err := runTemplateCommand(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle environment command
+		if command == "environment" {
+			if err := runEnvironmentCommand(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -263,5 +284,31 @@ func runTemplateCommand(args []string) error {
 		return template.RunValidateCommand(args[1:])
 	default:
 		return fmt.Errorf("unknown template subcommand: %s", subcommand)
+	}
+}
+
+func runEnvironmentCommand(args []string) error {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: environment command requires a subcommand\n\n")
+		printUsage()
+		return nil
+	}
+
+	subcommand := args[0]
+	switch subcommand {
+	case "add":
+		return environment.RunAddCommand(args[1:])
+	case "list":
+		return environment.RunListCommand(args[1:])
+	case "show":
+		return environment.RunShowCommand(args[1:])
+	case "update":
+		return environment.RunUpdateCommand(args[1:])
+	case "remove":
+		return environment.RunRemoveCommand(args[1:])
+	case "validate":
+		return environment.RunValidateCommand(args[1:])
+	default:
+		return fmt.Errorf("unknown environment subcommand: %s", subcommand)
 	}
 }
