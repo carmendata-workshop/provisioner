@@ -18,8 +18,8 @@ fi
 
 # Read template files
 SYSTEMD_SERVICE=$(cat "$TEMPLATE_DIR/provisioner.service")
-EXAMPLE_CONFIG_JSON=$(cat "$TEMPLATE_DIR/environments/simple-example/config.json")
-EXAMPLE_MAIN_TF=$(cat "$TEMPLATE_DIR/environments/simple-example/main.tf")
+EXAMPLE_CONFIG_JSON=$(cat "examples/environments/simple-example/config.json")
+EXAMPLE_MAIN_TF=$(cat "examples/environments/simple-example/main.tf")
 
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
@@ -48,5 +48,5 @@ chmod +x "$OUTPUT_FILE"
 echo "✅ Generated: $OUTPUT_FILE"
 echo "📋 Template sources:"
 echo "  - Service: $TEMPLATE_DIR/provisioner.service"
-echo "  - Config: $TEMPLATE_DIR/environments/simple-example/config.json"
-echo "  - Terraform: $TEMPLATE_DIR/environments/simple-example/main.tf"
+echo "  - Config: examples/environments/simple-example/config.json"
+echo "  - Terraform: examples/environments/simple-example/main.tf"
