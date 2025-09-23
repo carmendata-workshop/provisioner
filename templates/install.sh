@@ -68,10 +68,8 @@ if ! id "$USER_NAME" &>/dev/null; then
     useradd --system --home-dir /var/lib/"$USER_NAME" --shell /bin/false "$USER_NAME"
 fi
 
-# Detect if this is a fresh install or update
-FRESH_INSTALL=false
+# Check for existing installation
 if [ ! -f "$INSTALL_DIR/provisioner" ] && [ ! -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
-    FRESH_INSTALL=true
     echo "🆕 Detected fresh installation..."
 else
     echo "🔄 Detected existing installation - performing update..."
@@ -123,27 +121,92 @@ for binary in $BINARIES; do
     fi
 done
 
-# Create example environment (only on fresh install or if no environments exist)
-if [ "$FRESH_INSTALL" = true ] || [ ! -d "$CONFIG_DIR/environments/example" ]; then
-    # Check if ANY environments exist
-    ENV_COUNT=$(find "$CONFIG_DIR/environments" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+# Install example environments if none exist
+ENV_COUNT=$(find "$CONFIG_DIR/environments" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
 
-    if [ "$ENV_COUNT" -eq 0 ]; then
-        echo "📋 Creating example environment (no environments found)..."
-        mkdir -p "$CONFIG_DIR/environments/example"
+if [ "$ENV_COUNT" -eq 0 ]; then
+    echo "📋 Installing example environments (no environments found)..."
 
-        cat > "$CONFIG_DIR/environments/example/config.json" << 'EOF'
+    # Extract embedded examples archive
+    EXAMPLES_ARCHIVE=$(mktemp)
+    cat << 'EOF' | base64 -d > "$EXAMPLES_ARCHIVE"
+{{EXAMPLES_BASE64}}
+EOF
+
+    if tar -xzf "$EXAMPLES_ARCHIVE" -C "$TEMP_DIR" 2>/dev/null; then
+        if [ -d "$TEMP_DIR/environments" ]; then
+            echo "📦 Installing example environments..."
+            cp -r "$TEMP_DIR/environments"/* "$CONFIG_DIR/environments/"
+            echo "✅ Example environments installed:"
+            ls -1 "$CONFIG_DIR/environments/" | sed 's/^/  - /'
+        else
+            echo "⚠️  Malformed examples archive, creating basic example..."
+            mkdir -p "$CONFIG_DIR/environments/simple-example"
+            cat > "$CONFIG_DIR/environments/simple-example/config.json" << 'EOF'
 {{EXAMPLE_CONFIG_JSON}}
 EOF
-
-        cat > "$CONFIG_DIR/environments/example/main.tf" << 'EOF'
+            cat > "$CONFIG_DIR/environments/simple-example/main.tf" << 'EOF'
 {{EXAMPLE_MAIN_TF}}
 EOF
+        fi
     else
-        echo "📋 Skipping example environment (environments already exist)..."
+        echo "⚠️  Failed to extract examples archive, creating basic example..."
+        mkdir -p "$CONFIG_DIR/environments/simple-example"
+        cat > "$CONFIG_DIR/environments/simple-example/config.json" << 'EOF'
+{{EXAMPLE_CONFIG_JSON}}
+EOF
+        cat > "$CONFIG_DIR/environments/simple-example/main.tf" << 'EOF'
+{{EXAMPLE_MAIN_TF}}
+EOF
     fi
+
+    rm -f "$EXAMPLES_ARCHIVE"
 else
-    echo "📋 Skipping example environment (preserving existing configuration)..."
+    echo "📋 Skipping example environments (environments already exist)..."
+fi
+
+# Install example templates using templatectl
+TEMPLATE_COUNT=$(find "$STATE_DIR/templates" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+
+if [ "$TEMPLATE_COUNT" -eq 0 ]; then
+    echo "📋 Installing example templates (no templates found)..."
+
+    # Extract embedded templates archive
+    TEMPLATES_ARCHIVE=$(mktemp)
+    cat << 'EOF' | base64 -d > "$TEMPLATES_ARCHIVE"
+{{TEMPLATES_BASE64}}
+EOF
+
+    if tar -xzf "$TEMPLATES_ARCHIVE" -C "$TEMP_DIR" 2>/dev/null; then
+        if [ -d "$TEMP_DIR/templates" ]; then
+            echo "📦 Installing example templates..."
+
+            # Install each template using templatectl
+            for template_dir in "$TEMP_DIR/templates"/*; do
+                if [ -d "$template_dir" ]; then
+                    template_name=$(basename "$template_dir")
+                    echo "  Installing template: $template_name"
+
+                    # Use templatectl to add the template from file path
+                    if "$INSTALL_DIR/templatectl" add "$template_name" "file://$template_dir" 2>/dev/null; then
+                        echo "✅ Template '$template_name' installed successfully"
+                    else
+                        echo "⚠️  Warning: Failed to install template '$template_name'"
+                    fi
+                fi
+            done
+
+            echo "✅ Example templates installation complete"
+        else
+            echo "⚠️  Templates archive missing templates directory"
+        fi
+    else
+        echo "⚠️  Failed to extract templates archive"
+    fi
+
+    rm -f "$TEMPLATES_ARCHIVE"
+else
+    echo "📋 Skipping example templates (templates already exist)..."
 fi
 
 # Set ownership and permissions
@@ -187,28 +250,31 @@ systemctl status "$SERVICE_NAME" --no-pager -l
 echo ""
 if [ "$SERVICE_WAS_RUNNING" = true ]; then
     echo "✅ Update complete! Service has been restarted with the new binaries."
-elif [ "$FRESH_INSTALL" = true ]; then
-    echo "✅ Fresh installation complete! Service has been started."
 else
     echo "✅ Installation complete! Service has been started."
 fi
 echo ""
 echo "📁 Binaries: $INSTALL_DIR/"
 
-# Only mention example environment if it was created
-if [ "$ENV_COUNT" -eq 0 ] && [ "$FRESH_INSTALL" = true ]; then
-    echo "📝 Example environment created (disabled): $CONFIG_DIR/environments/example/"
+# Check if we just installed examples
+EXAMPLE_ENVS=$(find "$CONFIG_DIR/environments" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+EXAMPLE_TEMPLATES=$(find "$STATE_DIR/templates" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+
+if [ "$EXAMPLE_ENVS" -gt 0 ] || [ "$EXAMPLE_TEMPLATES" -gt 0 ]; then
+    echo "📝 Examples installed:"
+    [ "$EXAMPLE_ENVS" -gt 0 ] && echo "  - Environments: $CONFIG_DIR/environments/"
+    [ "$EXAMPLE_TEMPLATES" -gt 0 ] && echo "  - Templates: available via templatectl"
     echo ""
     echo "Next steps:"
-    echo "1. Review the example environment in $CONFIG_DIR/environments/example/"
-    echo "2. Enable it by editing config.json and setting 'enabled': true"
-    echo "3. Create your own environments in $CONFIG_DIR/environments/"
+    echo "1. Review examples: environmentctl list && templatectl list"
+    echo "2. Enable environments by editing their config.json files"
+    echo "3. Create your own environments and templates"
     echo "4. Restart service to pick up changes: sudo systemctl restart $SERVICE_NAME"
     echo "5. View logs: sudo journalctl -u $SERVICE_NAME -f"
 else
     echo ""
     echo "Next steps:"
-    echo "1. Check your environments: environmentctl list"
+    echo "1. Create environments and templates"
     echo "2. View service logs: sudo journalctl -u $SERVICE_NAME -f"
     echo "3. Check service status: sudo systemctl status $SERVICE_NAME"
 fi

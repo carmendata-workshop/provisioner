@@ -21,6 +21,19 @@ SYSTEMD_SERVICE=$(cat "$TEMPLATE_DIR/provisioner.service")
 EXAMPLE_CONFIG_JSON=$(cat "examples/environments/simple-example/config.json")
 EXAMPLE_MAIN_TF=$(cat "examples/environments/simple-example/main.tf")
 
+# Create embedded examples archives
+echo "📦 Creating embedded examples archive..."
+EXAMPLES_TAR=$(mktemp)
+tar -czf "$EXAMPLES_TAR" -C examples environments
+EXAMPLES_BASE64=$(base64 -w 0 < "$EXAMPLES_TAR")
+rm "$EXAMPLES_TAR"
+
+echo "📦 Creating embedded templates archive..."
+TEMPLATES_TAR=$(mktemp)
+tar -czf "$TEMPLATES_TAR" -C examples templates
+TEMPLATES_BASE64=$(base64 -w 0 < "$TEMPLATES_TAR")
+rm "$TEMPLATES_TAR"
+
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
 
@@ -32,11 +45,15 @@ cp "$TEMPLATE_FILE" "$TEMP_FILE"
 # Replace placeholders using awk for better multi-line handling
 awk -v systemd_service="$SYSTEMD_SERVICE" \
     -v example_config="$EXAMPLE_CONFIG_JSON" \
-    -v example_tf="$EXAMPLE_MAIN_TF" '
+    -v example_tf="$EXAMPLE_MAIN_TF" \
+    -v examples_base64="$EXAMPLES_BASE64" \
+    -v templates_base64="$TEMPLATES_BASE64" '
 {
     gsub(/{{SYSTEMD_SERVICE}}/, systemd_service)
     gsub(/{{EXAMPLE_CONFIG_JSON}}/, example_config)
     gsub(/{{EXAMPLE_MAIN_TF}}/, example_tf)
+    gsub(/{{EXAMPLES_BASE64}}/, examples_base64)
+    gsub(/{{TEMPLATES_BASE64}}/, templates_base64)
     print
 }' "$TEMP_FILE" > "$OUTPUT_FILE"
 
