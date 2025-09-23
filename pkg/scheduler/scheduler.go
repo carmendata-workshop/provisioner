@@ -151,7 +151,6 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) checkSchedules() {
 	now := time.Now()
-	logging.LogSystemd("Checking schedules at %s", now.Format("2006-01-02 15:04:05"))
 
 	// Check for configuration changes every 30 seconds
 	if now.Sub(s.lastConfigCheck) > 30*time.Second {
