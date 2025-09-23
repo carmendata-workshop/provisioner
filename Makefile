@@ -1,5 +1,5 @@
 # Build variables
-BINARY_NAME=provisioner
+BINARIES=provisioner environmentctl templatectl
 BIN_DIR=./bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -29,28 +29,36 @@ build-install:
 	@echo "Generating install script from templates..."
 	./scripts/build-install.sh
 
-# Build the binary
+# Build all binaries
 .PHONY: build
 build: $(BIN_DIR)
-	@echo "Building ${BINARY_NAME} ${VERSION}..."
-	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/${BINARY_NAME} .
+	@echo "Building all binaries ${VERSION}..."
+	@for binary in $(BINARIES); do \
+		echo "Building $$binary..."; \
+		CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/$$binary ./cmd/$$binary; \
+	done
 
 # Build for development (with race detection)
 .PHONY: build-dev
 build-dev: $(BIN_DIR)
-	@echo "Building ${BINARY_NAME} for development..."
-	go build -race ${LDFLAGS} -o ${BIN_DIR}/${BINARY_NAME} .
+	@echo "Building all binaries for development..."
+	@for binary in $(BINARIES); do \
+		echo "Building $$binary with race detection..."; \
+		go build -race ${LDFLAGS} -o ${BIN_DIR}/$$binary ./cmd/$$binary; \
+	done
 
 # Cross-compile for all platforms
 .PHONY: build-all
 build-all: clean dist
 	@echo "Cross-compiling for all platforms..."
 	@for platform in $(PLATFORMS); do \
-		echo "Building for $$platform..."; \
 		GOOS=$$(echo $$platform | cut -d'/' -f1); \
 		GOARCH=$$(echo $$platform | cut -d'/' -f2); \
-		CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build ${BUILD_FLAGS} ${LDFLAGS} \
-			-o dist/${BINARY_NAME}-$$GOOS-$$GOARCH .; \
+		for binary in $(BINARIES); do \
+			echo "Building $$binary for $$platform..."; \
+			CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build ${BUILD_FLAGS} ${LDFLAGS} \
+				-o dist/$$binary-$$GOOS-$$GOARCH ./cmd/$$binary; \
+		done \
 	done
 
 # Install the binary
@@ -190,7 +198,21 @@ ci-coverage:
 	@echo "Generating coverage for CI..."
 	go test -v -coverprofile=coverage.out ./...
 
-# Quick development build and run
+# Quick development build and run scheduler
 .PHONY: run
 run: build
-	$(BIN_DIR)/$(BINARY_NAME)
+	$(BIN_DIR)/provisioner
+
+# Individual binary build targets
+.PHONY: build-provisioner build-environmentctl build-templatectl
+build-provisioner: $(BIN_DIR)
+	@echo "Building provisioner..."
+	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/provisioner ./cmd/provisioner
+
+build-environmentctl: $(BIN_DIR)
+	@echo "Building environmentctl..."
+	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/environmentctl ./cmd/environmentctl
+
+build-templatectl: $(BIN_DIR)
+	@echo "Building templatectl..."
+	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/templatectl ./cmd/templatectl
