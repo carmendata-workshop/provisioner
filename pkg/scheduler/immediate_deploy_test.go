@@ -26,7 +26,7 @@ func TestImmediateDeploymentOnConfigChange(t *testing.T) {
 	deploymentTriggered := false
 
 	// Override the client to track deployments
-	mockClient.DeployFunc = func(workingDir string) error {
+	mockClient.DeployFunc = func(env *environment.Environment) error {
 		deploymentTriggered = true
 		return nil
 	}
@@ -174,7 +174,7 @@ func TestImmediateDeploymentWithScheduleCheck(t *testing.T) {
 	morningTime := time.Date(2024, 1, 1, 8, 0, 0, 0, time.UTC)
 	deploymentTriggered := false
 
-	mockClient.DeployFunc = func(workingDir string) error {
+	mockClient.DeployFunc = func(env *environment.Environment) error {
 		deploymentTriggered = true
 		return nil
 	}

@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	Enabled         bool        `json:"enabled"`
+	Template        string      `json:"template,omitempty"`
 	DeploySchedule  interface{} `json:"deploy_schedule"`
 	DestroySchedule interface{} `json:"destroy_schedule"`
 	Description     string      `json:"description"`
@@ -47,12 +48,25 @@ func LoadEnvironments(environmentsDir string) ([]Environment, error) {
 			continue
 		}
 
-		// Load all environments (enabled check will be done during scheduling)
-		environments = append(environments, Environment{
+		// Create environment
+		env := Environment{
 			Name:   entry.Name(), // Use folder name as environment name
 			Config: config,
 			Path:   envPath,
-		})
+		}
+
+		// Validate that the environment has either a local main.tf or a valid template
+		if !env.HasMainTF() {
+			if env.Config.Template == "" {
+				fmt.Printf("Warning: environment %s has no main.tf and no template specified\n", entry.Name())
+			} else {
+				fmt.Printf("Warning: environment %s references template '%s' but template not found\n", entry.Name(), env.Config.Template)
+			}
+			continue
+		}
+
+		// Load all environments (enabled check will be done during scheduling)
+		environments = append(environments, env)
 	}
 
 	return environments, nil
@@ -74,12 +88,79 @@ func loadConfig(configPath string) (Config, error) {
 }
 
 func (e *Environment) GetMainTFPath() string {
-	return filepath.Join(e.Path, "main.tf")
+	// Check for local main.tf first (highest priority)
+	localPath := filepath.Join(e.Path, "main.tf")
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath
+	}
+
+	// If no local main.tf and template is specified, use template path
+	if e.Config.Template != "" {
+		templatesDir := getTemplatesDir()
+		templatePath := filepath.Join(templatesDir, e.Config.Template, "main.tf")
+		if _, err := os.Stat(templatePath); err == nil {
+			return templatePath
+		}
+	}
+
+	// Return local path even if it doesn't exist (for error handling)
+	return localPath
 }
 
 func (e *Environment) HasMainTF() bool {
-	_, err := os.Stat(e.GetMainTFPath())
+	// Check for local main.tf first
+	localPath := filepath.Join(e.Path, "main.tf")
+	if _, err := os.Stat(localPath); err == nil {
+		return true
+	}
+
+	// Check for template main.tf if template is specified
+	if e.Config.Template != "" {
+		templatesDir := getTemplatesDir()
+		templatePath := filepath.Join(templatesDir, e.Config.Template, "main.tf")
+		if _, err := os.Stat(templatePath); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetTemplateDir returns the directory path for the template if one is specified
+func (e *Environment) GetTemplateDir() string {
+	if e.Config.Template == "" {
+		return ""
+	}
+	templatesDir := getTemplatesDir()
+	return filepath.Join(templatesDir, e.Config.Template)
+}
+
+// IsUsingTemplate returns true if the environment is using a template
+func (e *Environment) IsUsingTemplate() bool {
+	return e.Config.Template != "" && !e.hasLocalMainTF()
+}
+
+// GetTemplateReference returns the template name if using a template
+func (e *Environment) GetTemplateReference() string {
+	if e.IsUsingTemplate() {
+		return e.Config.Template
+	}
+	return ""
+}
+
+// hasLocalMainTF checks if there's a local main.tf file
+func (e *Environment) hasLocalMainTF() bool {
+	localPath := filepath.Join(e.Path, "main.tf")
+	_, err := os.Stat(localPath)
 	return err == nil
+}
+
+// getTemplatesDir returns the templates directory path
+func getTemplatesDir() string {
+	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
+		return filepath.Join(stateDir, "templates")
+	}
+	return "/var/lib/provisioner/templates"
 }
 
 // GetDeploySchedules returns deploy schedules as a slice, handling both string and []string formats

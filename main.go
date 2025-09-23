@@ -9,11 +9,12 @@ import (
 
 	"provisioner/pkg/logging"
 	"provisioner/pkg/scheduler"
+	"provisioner/pkg/template"
 	"provisioner/pkg/version"
 )
 
 func printUsage() {
-	fmt.Printf(`Usage: %s [COMMAND] [ENVIRONMENT]
+	fmt.Printf(`Usage: %s [COMMAND] [ARGUMENTS...]
 
 Commands:
   deploy ENVIRONMENT    Deploy specific environment immediately
@@ -21,6 +22,15 @@ Commands:
   status [ENVIRONMENT]  Show status of all environments or specific environment
   list                  List all configured environments
   logs ENVIRONMENT      Show recent logs for specific environment
+  template SUBCOMMAND   Manage templates
+
+Template Commands:
+  template add NAME URL [--path PATH] [--ref REF] [--description DESC]
+  template list [--detailed]
+  template show NAME
+  template update NAME | --all
+  template remove NAME [--force]
+  template validate NAME | --all
 
 Options:
   --help               Show this help
@@ -36,8 +46,10 @@ Examples:
   %s status my-app        # Show detailed status of 'my-app' environment
   %s list                 # List all configured environments
   %s logs my-app          # Show recent logs for 'my-app' environment
+  %s template add web-app https://github.com/org/templates --path web --ref v1.0
+  %s template list        # List all templates
   %s                      # Run scheduler daemon (default)
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 }
 
 func main() {
@@ -104,6 +116,15 @@ func main() {
 
 			envName := os.Args[2]
 			if err := runLogsCommand(envName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle template command
+		if command == "template" {
+			if err := runTemplateCommand(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -217,4 +238,30 @@ func runLogsCommand(envName string) error {
 
 	// Use the ShowLogs method
 	return sched.ShowLogs(envName)
+}
+
+func runTemplateCommand(args []string) error {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: template command requires a subcommand\n\n")
+		printUsage()
+		return nil
+	}
+
+	subcommand := args[0]
+	switch subcommand {
+	case "add":
+		return template.RunAddCommand(args[1:])
+	case "list":
+		return template.RunListCommand(args[1:])
+	case "show":
+		return template.RunShowCommand(args[1:])
+	case "update":
+		return template.RunUpdateCommand(args[1:])
+	case "remove":
+		return template.RunRemoveCommand(args[1:])
+	case "validate":
+		return template.RunValidateCommand(args[1:])
+	default:
+		return fmt.Errorf("unknown template subcommand: %s", subcommand)
+	}
 }

@@ -14,6 +14,7 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 
 - **Enhanced CRON scheduling** - Supports ranges, lists, intervals, and mixed combinations
 - **Multiple schedule support** - Deploy/destroy environments at different times using arrays of CRON expressions
+- **Template management system** - Centralized template storage with version control and sharing
 - **Multiple environments** - Manage multiple environments simultaneously
 - **State persistence** - Environment status survives application restarts
 - **Configuration hot-reload** - Automatically detects changes to config files and templates
@@ -60,7 +61,6 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
 4. **Add configuration** (`environments/example/config.json`):
    ```json
    {
-     "name": "example",
      "enabled": true,
      "deploy_schedule": "0 9 * * 1-5",
      "destroy_schedule": "0 18 * * 1-5",
@@ -81,6 +81,10 @@ The Provisioner automatically manages OpenTofu environments on a schedule, allow
    ./bin/provisioner status                  # Show environment status
    ./bin/provisioner deploy example          # Deploy environment manually
    ./bin/provisioner logs example            # View environment logs
+
+   # Template management
+   ./bin/provisioner template list           # List all templates
+   ./bin/provisioner template add web-app https://github.com/org/templates --path web --ref v1.0
    ```
 
 ## Directory Structure
@@ -92,15 +96,22 @@ provisioner/
 ├── pkg/
 │   ├── scheduler/           # CRON scheduling and state management
 │   ├── environment/         # Environment configuration loading
+│   ├── template/            # Template management system
 │   ├── opentofu/           # OpenTofu CLI wrapper
 │   ├── logging/            # Dual logging (systemd + file)
 │   └── version/            # Build information and versioning
-├── environments/           # Environment templates
-│   └── example/
-│       ├── main.tf         # OpenTofu template
-│       └── config.json     # Environment configuration
+├── environments/           # Environment configurations
+│   ├── example/
+│   │   ├── main.tf         # Local OpenTofu template
+│   │   └── config.json     # Environment configuration
+│   └── template-example/
+│       └── config.json     # Environment using template reference
 ├── state/                  # State persistence
-│   └── scheduler.json      # Environment state tracking
+│   ├── scheduler.json      # Environment state tracking
+│   └── templates/          # Template storage
+│       ├── registry.json   # Template metadata
+│       └── web-app/        # Template content
+│           └── main.tf
 └── logs/                   # Operation logs
 ```
 
@@ -109,13 +120,25 @@ provisioner/
 Each environment requires two files in `environments/{name}/`:
 
 ### config.json
+
+**Local Template:**
 ```json
 {
-  "name": "environment-name",
   "enabled": true,
   "deploy_schedule": "0 9 * * 1-5",
   "destroy_schedule": "0 18 * * 1-5",
-  "description": "Environment description"
+  "description": "Environment with local main.tf"
+}
+```
+
+**Template Reference:**
+```json
+{
+  "enabled": true,
+  "template": "web-app-v2",
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "Environment using shared template"
 }
 ```
 
@@ -146,11 +169,16 @@ Set `destroy_schedule` to `false` for environments that should never be automati
 ```
 
 **Field descriptions:**
-- `name` - Environment identifier (must match directory name)
 - `enabled` - Whether environment should be processed by scheduler
+- `template` - (Optional) Reference to managed template by name
 - `deploy_schedule` - CRON expression(s) for deployment times (string or array of strings)
 - `destroy_schedule` - CRON expression(s) for destruction times (string, array of strings, or `false` for permanent)
 - `description` - Human-readable description
+
+**Template Resolution Priority:**
+1. **Local `main.tf`** - Always highest priority (allows customization)
+2. **Template reference** - Uses template from template registry
+3. **Error** - No template found
 
 **Schedule Behavior:**
 - **Single schedule**: Environment deploys/destroys at the specified time
@@ -160,6 +188,8 @@ Set `destroy_schedule` to `false` for environments that should never be automati
 
 ### main.tf
 Standard OpenTofu/Terraform configuration file with your infrastructure definition.
+
+**Note:** If using a template reference, `main.tf` is optional. Local `main.tf` files override template references for customization.
 
 ### State File Format
 The scheduler maintains state in `scheduler.json`:
@@ -230,12 +260,42 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 - Error messages from failed operations
 - State persistence across application restarts
 
+## Template Usage Examples
+
+### Adding and Using Templates
+
+```bash
+# Add a web application template from GitHub
+provisioner template add web-app https://github.com/company/infra-templates --path templates/web-app --ref v1.2.0 --description "Standard web application template"
+
+# Add a database template
+provisioner template add postgres-db https://github.com/company/infra-templates --path templates/postgres --ref main --description "PostgreSQL database template"
+
+# List available templates
+provisioner template list
+# Output:
+# NAME         SOURCE                                   REF    DESCRIPTION
+# web-app      https://github.com/company/infra-templates  v1.2.0  Standard web application template
+# postgres-db  https://github.com/company/infra-templates  main    PostgreSQL database template
+
+# Use template in environment configuration (environments/my-app/config.json)
+{
+  "enabled": true,
+  "template": "web-app",
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "My web application using shared template"
+}
+
+# Update templates (checks for changes and updates environments on next deployment)
+provisioner template update web-app
+```
+
 ## Example Environments
 
 ### Development Environment (Business Hours)
 ```json
 {
-  "name": "everest",
   "enabled": true,
   "deploy_schedule": "0 9 * * 1-5",
   "destroy_schedule": "0 18 * * 1-5",
@@ -246,7 +306,6 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 ### Testing Environment (Twice Daily)
 ```json
 {
-  "name": "kilimanjaro",
   "enabled": true,
   "deploy_schedule": "0 6,14 * * *",
   "destroy_schedule": "0 12,20 * * *",
@@ -257,18 +316,17 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 ### Demo Environment (Weekdays Excluding Wednesday)
 ```json
 {
-  "name": "denali",
   "enabled": true,
+  "template": "demo-app",
   "deploy_schedule": "0 9 * * 1,2,4,5",
   "destroy_schedule": "30 17 * * 1,2,4,5",
-  "description": "Demo environment - Mon/Tue/Thu/Fri 9am-5:30pm (no Wednesday)"
+  "description": "Demo environment using shared template - Mon/Tue/Thu/Fri 9am-5:30pm"
 }
 ```
 
 ### Extended Hours Environment (Business Hours)
 ```json
 {
-  "name": "mckinley",
   "enabled": true,
   "deploy_schedule": "0 7 * * 1-5",
   "destroy_schedule": "0 19 * * 1-5",
@@ -279,7 +337,6 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 ### Training Environment (Tuesday/Thursday Only)
 ```json
 {
-  "name": "k2",
   "enabled": true,
   "deploy_schedule": "30 8 * * 2,4",
   "destroy_schedule": "30 16 * * 2,4",
@@ -290,7 +347,6 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 ### Permanent Environment (Never Destroyed)
 ```json
 {
-  "name": "production",
   "enabled": true,
   "deploy_schedule": "0 6 * * 1",
   "destroy_schedule": false,
@@ -301,7 +357,6 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 ### Multiple Deploy Schedules (Different Times for Different Days)
 ```json
 {
-  "name": "annapurna",
   "enabled": true,
   "deploy_schedule": ["0 7 * * 1,3,5", "0 8 * * 2,4"],
   "destroy_schedule": "30 17 * * 1-5",
@@ -312,7 +367,6 @@ Environment state is automatically saved to `state/scheduler.json` and includes:
 ### Testing Environment (Multiple Daily Cycles)
 ```json
 {
-  "name": "matterhorn",
   "enabled": true,
   "deploy_schedule": ["0 6 * * 1-5", "0 14 * * 1-5"],
   "destroy_schedule": ["0 12 * * 1-5", "0 18 * * 1-5"],
@@ -454,8 +508,21 @@ When installed via the installer, files are organized according to the Linux Fil
 │       ├── main.tf           # OpenTofu template
 │       └── config.json       # Environment configuration
 
-/var/lib/provisioner/          # State data
+/var/lib/provisioner/          # State and template data
 ├── scheduler.json            # Environment state persistence
+├── templates/                # Template storage
+│   ├── registry.json         # Template metadata registry
+│   ├── web-app-v2/          # Template content
+│   │   ├── main.tf
+│   │   └── variables.tf
+│   └── database/
+│       └── main.tf
+└── workspaces/               # Environment working directories
+    ├── my-web-env/
+    │   ├── main.tf           # Copied from template
+    │   ├── terraform.tfstate # Environment state
+    │   └── .provisioner-metadata.json
+    └── another-env/
 
 /var/log/provisioner/          # Application logs
 ├── (log files if file logging enabled)
@@ -525,6 +592,122 @@ All operations are logged with timestamps:
 - OpenTofu command output
 - State changes and errors
 - Application lifecycle events
+
+## Template Management
+
+The provisioner includes a comprehensive template management system for sharing and versioning OpenTofu templates across multiple environments.
+
+### Template Commands
+
+**Add Template:**
+```bash
+# Add template from GitHub repository
+provisioner template add web-app https://github.com/org/terraform-templates --path environments/web-app --ref v2.1.0
+
+# Add with description
+provisioner template add database https://github.com/company/infra-templates --path db/postgres --ref main --description "PostgreSQL database template"
+```
+
+**List Templates:**
+```bash
+provisioner template list                    # Basic list
+provisioner template list --detailed         # Detailed information
+```
+
+**Show Template Details:**
+```bash
+provisioner template show web-app
+```
+
+**Update Templates:**
+```bash
+provisioner template update web-app          # Update specific template
+provisioner template update --all            # Update all templates
+```
+
+**Validate Templates:**
+```bash
+provisioner template validate web-app        # Validate specific template
+provisioner template validate --all          # Validate all templates
+```
+
+**Remove Templates:**
+```bash
+provisioner template remove web-app          # Interactive confirmation
+provisioner template remove web-app --force  # Skip confirmation
+```
+
+### Template Storage Structure
+
+Templates are stored in `/var/lib/provisioner/templates/`:
+
+```
+/var/lib/provisioner/templates/
+├── registry.json                 # Template metadata registry
+├── web-app-v2/                  # Template content
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+└── database/                    # Another template
+    ├── main.tf
+    └── variables.tf
+```
+
+### Template Registry Format
+
+The template registry (`registry.json`) tracks metadata:
+
+```json
+{
+  "templates": {
+    "web-app-v2": {
+      "name": "web-app-v2",
+      "source_url": "https://github.com/org/terraform-templates",
+      "source_path": "environments/web-app",
+      "source_ref": "v2.1.0",
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-15T10:30:00Z",
+      "content_hash": "abc123...",
+      "description": "Modern web application template",
+      "version": "v2.1.0"
+    }
+  }
+}
+```
+
+### Template Update Behavior
+
+**When a template is updated:**
+- **Currently deployed environments**: Continue running with current template version (stable)
+- **Next scheduled deployment**: Automatically uses updated template
+- **Manual deployment**: `provisioner deploy env-name` forces immediate template update
+- **Change detection**: Only real content changes trigger environment updates
+
+**Template Resolution Priority:**
+1. **Local `main.tf`**: Always highest priority (allows environment-specific customization)
+2. **Template reference**: Resolved from template registry
+3. **Error**: No template found
+
+### Working Directory Management
+
+Each environment gets its own isolated working directory:
+
+```
+/var/lib/provisioner/workspaces/
+├── my-web-env/
+│   ├── main.tf                     # Copied from template
+│   ├── variables.tf                # Additional template files
+│   ├── terraform.tfstate           # Environment-specific state
+│   └── .provisioner-metadata.json # Template tracking
+└── another-env/
+    └── ...
+```
+
+**Benefits:**
+- **State Isolation**: Each environment maintains separate Terraform state
+- **Template Stability**: Updates don't disrupt running environments
+- **Change Tracking**: Content hashing detects real template changes
+- **Version Control**: Templates track source URL, path, and Git ref
 
 ## CLI Commands
 

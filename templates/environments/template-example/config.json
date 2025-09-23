@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "template": "web-app-v1",
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "Example environment using template reference (disabled by default)"
+}

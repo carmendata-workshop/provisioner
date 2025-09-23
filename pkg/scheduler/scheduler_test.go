@@ -54,8 +54,9 @@ func TestSchedulerDeployEnvironment(t *testing.T) {
 		t.Errorf("expected 1 deploy call, got %d", mockClient.DeployCallCount)
 	}
 
-	if mockClient.GetLastDeployPath() != envPath {
-		t.Errorf("expected deploy path '%s', got '%s'", envPath, mockClient.GetLastDeployPath())
+	deployEnv := mockClient.GetLastDeployEnv()
+	if deployEnv == nil || deployEnv.Path != envPath {
+		t.Errorf("expected deploy env path '%s', got %v", envPath, deployEnv)
 	}
 
 	// Verify state was updated
@@ -149,8 +150,9 @@ func TestSchedulerDestroyEnvironment(t *testing.T) {
 		t.Errorf("expected 1 destroy call, got %d", mockClient.DestroyCallCount)
 	}
 
-	if mockClient.GetLastDestroyPath() != envPath {
-		t.Errorf("expected destroy path '%s', got '%s'", envPath, mockClient.GetLastDestroyPath())
+	destroyEnv := mockClient.GetLastDestroyEnv()
+	if destroyEnv == nil || destroyEnv.Path != envPath {
+		t.Errorf("expected destroy env path '%s', got %v", envPath, destroyEnv)
 	}
 
 	// Verify state was updated

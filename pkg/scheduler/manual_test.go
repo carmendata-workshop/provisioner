@@ -62,8 +62,8 @@ func TestManualDeploy(t *testing.T) {
 	if mockClient.DeployCallCount != 1 {
 		t.Errorf("Expected Deploy to be called once, got %d calls", mockClient.DeployCallCount)
 	}
-	if len(mockClient.DeployCallPaths) == 0 || mockClient.DeployCallPaths[0] != envDir {
-		t.Errorf("Deploy was not called with correct environment path. Expected %s, got %v", envDir, mockClient.DeployCallPaths)
+	if len(mockClient.DeployCallEnvs) == 0 || mockClient.DeployCallEnvs[0].Name != envName {
+		t.Errorf("Deploy was not called with correct environment. Expected %s, got %v", envName, mockClient.DeployCallEnvs)
 	}
 
 	// Verify state was updated
@@ -132,8 +132,8 @@ func TestManualDestroy(t *testing.T) {
 	if mockClient.DestroyCallCount != 1 {
 		t.Errorf("Expected DestroyEnvironment to be called once, got %d calls", mockClient.DestroyCallCount)
 	}
-	if len(mockClient.DestroyCallPaths) == 0 || mockClient.DestroyCallPaths[0] != envDir {
-		t.Errorf("DestroyEnvironment was not called with correct environment path. Expected %s, got %v", envDir, mockClient.DestroyCallPaths)
+	if len(mockClient.DestroyCallEnvs) == 0 || mockClient.DestroyCallEnvs[0].Name != envName {
+		t.Errorf("DestroyEnvironment was not called with correct environment. Expected %s, got %v", envName, mockClient.DestroyCallEnvs)
 	}
 
 	// Verify state was updated

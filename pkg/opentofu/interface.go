@@ -1,9 +1,11 @@
 package opentofu
 
+import "provisioner/pkg/environment"
+
 // TofuClient defines the interface for OpenTofu operations
 type TofuClient interface {
-	Deploy(environmentPath string) error
-	DestroyEnvironment(environmentPath string) error
+	Deploy(env *environment.Environment) error
+	DestroyEnvironment(env *environment.Environment) error
 }
 
 // Ensure Client implements TofuClient interface

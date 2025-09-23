@@ -331,7 +331,7 @@ func (s *Scheduler) deployEnvironment(env environment.Environment) {
 	s.state.SetEnvironmentStatus(envName, StatusDeploying)
 	_ = s.SaveState()
 
-	if err := s.client.Deploy(env.Path); err != nil {
+	if err := s.client.Deploy(&env); err != nil {
 		// Log high-level failure to systemd
 		logging.LogEnvironmentOperation(envName, "DEPLOY", "Failed: %s", getHighLevelError(err))
 
@@ -359,7 +359,7 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 	s.state.SetEnvironmentStatus(envName, StatusDestroying)
 	_ = s.SaveState()
 
-	if err := s.client.DestroyEnvironment(env.Path); err != nil {
+	if err := s.client.DestroyEnvironment(&env); err != nil {
 		// Log high-level failure to systemd
 		logging.LogEnvironmentOperation(envName, "DESTROY", "Failed: %s", getHighLevelError(err))
 
@@ -645,7 +645,7 @@ func (s *Scheduler) manualDeployEnvironment(env environment.Environment) {
 		s.client = client
 	}
 
-	if err := s.client.Deploy(env.Path); err != nil {
+	if err := s.client.Deploy(&env); err != nil {
 		// Log high-level failure to systemd
 		logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Failed: %s", getHighLevelError(err))
 
@@ -683,7 +683,7 @@ func (s *Scheduler) manualDestroyEnvironment(env environment.Environment) {
 		s.client = client
 	}
 
-	if err := s.client.DestroyEnvironment(env.Path); err != nil {
+	if err := s.client.DestroyEnvironment(&env); err != nil {
 		// Log high-level failure to systemd
 		logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Failed: %s", getHighLevelError(err))
 

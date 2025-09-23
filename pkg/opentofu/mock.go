@@ -1,30 +1,32 @@
 package opentofu
 
+import "provisioner/pkg/environment"
+
 // MockTofuClient is a mock implementation of TofuClient for testing
 type MockTofuClient struct {
-	DeployFunc       func(environmentPath string) error
-	DestroyFunc      func(environmentPath string) error
+	DeployFunc       func(env *environment.Environment) error
+	DestroyFunc      func(env *environment.Environment) error
 	DeployCallCount  int
 	DestroyCallCount int
-	DeployCallPaths  []string
-	DestroyCallPaths []string
+	DeployCallEnvs   []*environment.Environment
+	DestroyCallEnvs  []*environment.Environment
 }
 
 // NewMockTofuClient creates a new mock client with default success behavior
 func NewMockTofuClient() *MockTofuClient {
 	return &MockTofuClient{
-		DeployCallPaths:  make([]string, 0),
-		DestroyCallPaths: make([]string, 0),
+		DeployCallEnvs:  make([]*environment.Environment, 0),
+		DestroyCallEnvs: make([]*environment.Environment, 0),
 	}
 }
 
 // Deploy mocks the deploy operation
-func (m *MockTofuClient) Deploy(environmentPath string) error {
+func (m *MockTofuClient) Deploy(env *environment.Environment) error {
 	m.DeployCallCount++
-	m.DeployCallPaths = append(m.DeployCallPaths, environmentPath)
+	m.DeployCallEnvs = append(m.DeployCallEnvs, env)
 
 	if m.DeployFunc != nil {
-		return m.DeployFunc(environmentPath)
+		return m.DeployFunc(env)
 	}
 
 	// Default success behavior
@@ -32,36 +34,36 @@ func (m *MockTofuClient) Deploy(environmentPath string) error {
 }
 
 // DestroyEnvironment mocks the destroy operation
-func (m *MockTofuClient) DestroyEnvironment(environmentPath string) error {
+func (m *MockTofuClient) DestroyEnvironment(env *environment.Environment) error {
 	m.DestroyCallCount++
-	m.DestroyCallPaths = append(m.DestroyCallPaths, environmentPath)
+	m.DestroyCallEnvs = append(m.DestroyCallEnvs, env)
 
 	if m.DestroyFunc != nil {
-		return m.DestroyFunc(environmentPath)
+		return m.DestroyFunc(env)
 	}
 
 	// Default success behavior
 	return nil
 }
 
-// Reset clears all call counts and paths
+// Reset clears all call counts and environments
 func (m *MockTofuClient) Reset() {
 	m.DeployCallCount = 0
 	m.DestroyCallCount = 0
-	m.DeployCallPaths = m.DeployCallPaths[:0]
-	m.DestroyCallPaths = m.DestroyCallPaths[:0]
+	m.DeployCallEnvs = m.DeployCallEnvs[:0]
+	m.DestroyCallEnvs = m.DestroyCallEnvs[:0]
 }
 
 // SetDeployError configures the mock to return an error on deploy
 func (m *MockTofuClient) SetDeployError(err error) {
-	m.DeployFunc = func(string) error {
+	m.DeployFunc = func(*environment.Environment) error {
 		return err
 	}
 }
 
 // SetDestroyError configures the mock to return an error on destroy
 func (m *MockTofuClient) SetDestroyError(err error) {
-	m.DestroyFunc = func(string) error {
+	m.DestroyFunc = func(*environment.Environment) error {
 		return err
 	}
 }
@@ -76,20 +78,20 @@ func (m *MockTofuClient) SetDestroySuccess() {
 	m.DestroyFunc = nil
 }
 
-// GetLastDeployPath returns the path from the most recent deploy call
-func (m *MockTofuClient) GetLastDeployPath() string {
-	if len(m.DeployCallPaths) == 0 {
-		return ""
+// GetLastDeployEnv returns the environment from the most recent deploy call
+func (m *MockTofuClient) GetLastDeployEnv() *environment.Environment {
+	if len(m.DeployCallEnvs) == 0 {
+		return nil
 	}
-	return m.DeployCallPaths[len(m.DeployCallPaths)-1]
+	return m.DeployCallEnvs[len(m.DeployCallEnvs)-1]
 }
 
-// GetLastDestroyPath returns the path from the most recent destroy call
-func (m *MockTofuClient) GetLastDestroyPath() string {
-	if len(m.DestroyCallPaths) == 0 {
-		return ""
+// GetLastDestroyEnv returns the environment from the most recent destroy call
+func (m *MockTofuClient) GetLastDestroyEnv() *environment.Environment {
+	if len(m.DestroyCallEnvs) == 0 {
+		return nil
 	}
-	return m.DestroyCallPaths[len(m.DestroyCallPaths)-1]
+	return m.DestroyCallEnvs[len(m.DestroyCallEnvs)-1]
 }
 
 // Ensure MockTofuClient implements TofuClient interface

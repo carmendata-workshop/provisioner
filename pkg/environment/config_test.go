@@ -54,6 +54,11 @@ func TestLoadEnvironments(t *testing.T) {
 		t.Fatalf("failed to write config2: %v", err)
 	}
 
+	// Create main.tf for env2 so it passes validation
+	if err := os.WriteFile(filepath.Join(env2Dir, "main.tf"), []byte("# test tf 2"), 0644); err != nil {
+		t.Fatalf("failed to write main.tf for env2: %v", err)
+	}
+
 	// Create directory without config.json
 	env3Dir := filepath.Join(tempDir, "test-env-3")
 	if err := os.MkdirAll(env3Dir, 0755); err != nil {
@@ -341,6 +346,23 @@ func TestConfigJSONSerialization(t *testing.T) {
 				Description:     "test env",
 			},
 		},
+		{
+			name: "config with template",
+			jsonData: `{
+				"enabled": true,
+				"template": "web-app-v2",
+				"deploy_schedule": "0 9 * * 1-5",
+				"destroy_schedule": "0 18 * * 1-5",
+				"description": "Web app using template"
+			}`,
+			expected: Config{
+				Enabled:         true,
+				Template:        "web-app-v2",
+				DeploySchedule:  "0 9 * * 1-5",
+				DestroySchedule: "0 18 * * 1-5",
+				Description:     "Web app using template",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -351,9 +373,12 @@ func TestConfigJSONSerialization(t *testing.T) {
 				t.Fatalf("failed to unmarshal JSON: %v", err)
 			}
 
-			// Name field no longer exists
+			// Check all fields
 			if config.Enabled != tt.expected.Enabled {
 				t.Errorf("expected enabled %v, got %v", tt.expected.Enabled, config.Enabled)
+			}
+			if config.Template != tt.expected.Template {
+				t.Errorf("expected template '%s', got '%s'", tt.expected.Template, config.Template)
 			}
 
 			// Test that the schedules can be processed
