@@ -809,22 +809,45 @@ func (s *Scheduler) printEnvironmentStatus(env environment.Environment) {
 	deploySchedules, _ := env.Config.GetDeploySchedules()
 	destroySchedules, _ := env.Config.GetDestroySchedules()
 
+	// Use actual OpenTofu state as source of truth for deployment status
+	actualStatus := env.GetDeploymentStatus()
+
 	fmt.Printf("Environment: %s\n", env.Name)
-	fmt.Printf("Status: %s\n", state.Status)
+	fmt.Printf("Status: %s\n", actualStatus)
 	fmt.Printf("Enabled: %t\n", env.Config.Enabled)
 	fmt.Printf("Deploy Schedule: %s\n", formatSchedules(deploySchedules))
 	fmt.Printf("Destroy Schedule: %s\n", formatSchedules(destroySchedules))
 
-	if state.LastDeployed != nil {
-		fmt.Printf("Last Deployed: %s\n", state.LastDeployed.Format("2006-01-02 15:04:05"))
+	// Use filesystem timestamps as more accurate source, fall back to managed state
+	if stateChangeTime := env.GetLastStateChangeTime(); stateChangeTime != nil {
+		if actualStatus == "deployed" {
+			fmt.Printf("Last Deployed: %s\n", stateChangeTime.Format("2006-01-02 15:04:05"))
+			if state.LastDestroyed != nil {
+				fmt.Printf("Last Destroyed: %s\n", state.LastDestroyed.Format("2006-01-02 15:04:05"))
+			} else {
+				fmt.Printf("Last Destroyed: Never\n")
+			}
+		} else {
+			if state.LastDeployed != nil {
+				fmt.Printf("Last Deployed: %s\n", state.LastDeployed.Format("2006-01-02 15:04:05"))
+			} else {
+				fmt.Printf("Last Deployed: Never\n")
+			}
+			fmt.Printf("Last Destroyed: %s\n", stateChangeTime.Format("2006-01-02 15:04:05"))
+		}
 	} else {
-		fmt.Printf("Last Deployed: Never\n")
-	}
+		// Fall back to managed state timestamps
+		if state.LastDeployed != nil {
+			fmt.Printf("Last Deployed: %s\n", state.LastDeployed.Format("2006-01-02 15:04:05"))
+		} else {
+			fmt.Printf("Last Deployed: Never\n")
+		}
 
-	if state.LastDestroyed != nil {
-		fmt.Printf("Last Destroyed: %s\n", state.LastDestroyed.Format("2006-01-02 15:04:05"))
-	} else {
-		fmt.Printf("Last Destroyed: Never\n")
+		if state.LastDestroyed != nil {
+			fmt.Printf("Last Destroyed: %s\n", state.LastDestroyed.Format("2006-01-02 15:04:05"))
+		} else {
+			fmt.Printf("Last Destroyed: Never\n")
+		}
 	}
 
 	if state.LastConfigModified != nil {
@@ -844,14 +867,35 @@ func (s *Scheduler) printEnvironmentStatus(env environment.Environment) {
 }
 
 func (s *Scheduler) printEnvironmentStatusLine(env environment.Environment, state *EnvironmentState) {
-	lastDeployed := "Never"
-	if state.LastDeployed != nil {
-		lastDeployed = state.LastDeployed.Format("2006-01-02 15:04")
-	}
+	// Use actual OpenTofu state as source of truth for deployment status
+	actualStatus := env.GetDeploymentStatus()
 
+	// Use filesystem timestamps as more accurate source, fall back to managed state
+	lastDeployed := "Never"
 	lastDestroyed := "Never"
-	if state.LastDestroyed != nil {
-		lastDestroyed = state.LastDestroyed.Format("2006-01-02 15:04")
+
+	if stateChangeTime := env.GetLastStateChangeTime(); stateChangeTime != nil {
+		if actualStatus == "deployed" {
+			lastDeployed = stateChangeTime.Format("2006-01-02 15:04")
+			// Use managed state for last destroyed if available
+			if state.LastDestroyed != nil {
+				lastDestroyed = state.LastDestroyed.Format("2006-01-02 15:04")
+			}
+		} else {
+			lastDestroyed = stateChangeTime.Format("2006-01-02 15:04")
+			// Use managed state for last deployed if available
+			if state.LastDeployed != nil {
+				lastDeployed = state.LastDeployed.Format("2006-01-02 15:04")
+			}
+		}
+	} else {
+		// Fall back to managed state timestamps
+		if state.LastDeployed != nil {
+			lastDeployed = state.LastDeployed.Format("2006-01-02 15:04")
+		}
+		if state.LastDestroyed != nil {
+			lastDestroyed = state.LastDestroyed.Format("2006-01-02 15:04")
+		}
 	}
 
 	errors := "None"
@@ -861,7 +905,7 @@ func (s *Scheduler) printEnvironmentStatusLine(env environment.Environment, stat
 
 	fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n",
 		env.Name,
-		string(state.Status),
+		actualStatus,
 		lastDeployed,
 		lastDestroyed,
 		errors)

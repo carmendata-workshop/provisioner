@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -153,6 +155,75 @@ func (e *Environment) hasLocalMainTF() bool {
 	localPath := filepath.Join(e.Path, "main.tf")
 	_, err := os.Stat(localPath)
 	return err == nil
+}
+
+// GetDeploymentStatus returns the actual deployment status based on OpenTofu state files
+// This is the source of truth for whether resources are actually deployed or destroyed
+func (e *Environment) GetDeploymentStatus() string {
+	stateFile := e.getStateFilePath()
+	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+		return "destroyed"
+	}
+
+	// Check if state file has actual resources (not just empty state)
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return "destroyed" // Can't read state file, assume destroyed
+	}
+
+	// Simple check for resources in state file
+	if strings.Contains(string(data), `"resources":[]`) {
+		return "destroyed" // Empty resources array means destroyed
+	}
+
+	return "deployed"
+}
+
+// getStateFilePath returns the path to the terraform.tfstate file for this environment
+func (e *Environment) getStateFilePath() string {
+	stateDir := getStateDir()
+
+	// Try new workspace structure first
+	workspaceStateFile := filepath.Join(stateDir, "workspaces", e.Name, "terraform.tfstate")
+	if _, err := os.Stat(workspaceStateFile); err == nil {
+		return workspaceStateFile
+	}
+
+	// Fall back to old structure (direct in state dir)
+	oldStateFile := filepath.Join(stateDir, e.Name, "terraform.tfstate")
+	if _, err := os.Stat(oldStateFile); err == nil {
+		return oldStateFile
+	}
+
+	// Default to workspace structure (for consistency)
+	return workspaceStateFile
+}
+
+// getStateDir returns the state directory using the same logic as OpenTofu client
+func getStateDir() string {
+	// First check environment variable (explicit override)
+	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
+		return stateDir
+	}
+
+	// Auto-detect system installation
+	if _, err := os.Stat("/var/lib/provisioner"); err == nil {
+		return "/var/lib/provisioner"
+	}
+
+	// Fall back to development default
+	return "state"
+}
+
+// GetLastStateChangeTime returns the last time the state file was modified
+// This provides more accurate timing than managed state timestamps
+func (e *Environment) GetLastStateChangeTime() *time.Time {
+	stateFile := e.getStateFilePath()
+	if info, err := os.Stat(stateFile); err == nil {
+		modTime := info.ModTime()
+		return &modTime
+	}
+	return nil
 }
 
 // getTemplatesDir returns the templates directory path
