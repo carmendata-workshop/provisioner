@@ -81,9 +81,11 @@ func RunListCommand(args []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	if detailed {
-		fmt.Fprintln(w, "NAME\tSOURCE\tPATH\tREF\tCREATED\tUPDATED\tDESCRIPTION")
+		if _, err := fmt.Fprintln(w, "NAME\tSOURCE\tPATH\tREF\tCREATED\tUPDATED\tDESCRIPTION"); err != nil {
+			return err
+		}
 		for _, template := range templates {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				template.Name,
 				template.SourceURL,
 				template.SourcePath,
@@ -91,22 +93,27 @@ func RunListCommand(args []string) error {
 				template.CreatedAt.Format("2006-01-02"),
 				template.UpdatedAt.Format("2006-01-02"),
 				template.Description,
-			)
+			); err != nil {
+				return err
+			}
 		}
 	} else {
-		fmt.Fprintln(w, "NAME\tSOURCE\tREF\tDESCRIPTION")
+		if _, err := fmt.Fprintln(w, "NAME\tSOURCE\tREF\tDESCRIPTION"); err != nil {
+			return err
+		}
 		for _, template := range templates {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 				template.Name,
 				template.SourceURL,
 				template.SourceRef,
 				template.Description,
-			)
+			); err != nil {
+				return err
+			}
 		}
 	}
 
-	w.Flush()
-	return nil
+	return w.Flush()
 }
 
 func RunShowCommand(args []string) error {
@@ -198,7 +205,10 @@ func RunRemoveCommand(args []string) error {
 	if !force {
 		fmt.Printf("Are you sure you want to remove template '%s'? (y/N): ", name)
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			fmt.Println("Cancelled")
+			return nil
+		}
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
 			fmt.Println("Cancelled")
 			return nil

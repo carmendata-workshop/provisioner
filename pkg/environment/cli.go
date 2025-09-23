@@ -284,7 +284,10 @@ func RunRemoveCommand(args []string) error {
 		// Confirm removal
 		fmt.Printf("Are you sure you want to remove environment '%s'? (y/N): ", name)
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			fmt.Println("Cancelled")
+			return nil
+		}
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
 			fmt.Println("Cancelled")
 			return nil
@@ -360,7 +363,9 @@ func RunListCommand(args []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	if detailed {
-		fmt.Fprintln(w, "NAME\tENABLED\tSOURCE\tTEMPLATE\tDEPLOY SCHEDULE\tDESTROY SCHEDULE\tDESCRIPTION")
+		if _, err := fmt.Fprintln(w, "NAME\tENABLED\tSOURCE\tTEMPLATE\tDEPLOY SCHEDULE\tDESTROY SCHEDULE\tDESCRIPTION"); err != nil {
+			return err
+		}
 		for _, env := range environments {
 			source := "Local"
 			if env.IsUsingTemplate() {
@@ -370,7 +375,7 @@ func RunListCommand(args []string) error {
 			deploySchedules, _ := env.Config.GetDeploySchedules()
 			destroySchedules, _ := env.Config.GetDestroySchedules()
 
-			fmt.Fprintf(w, "%s\t%t\t%s\t%s\t%s\t%s\t%s\n",
+			if _, err := fmt.Fprintf(w, "%s\t%t\t%s\t%s\t%s\t%s\t%s\n",
 				env.Name,
 				env.Config.Enabled,
 				source,
@@ -378,25 +383,30 @@ func RunListCommand(args []string) error {
 				strings.Join(deploySchedules, ","),
 				strings.Join(destroySchedules, ","),
 				env.Config.Description,
-			)
+			); err != nil {
+				return err
+			}
 		}
 	} else {
-		fmt.Fprintln(w, "NAME\tENABLED\tSOURCE\tDESCRIPTION")
+		if _, err := fmt.Fprintln(w, "NAME\tENABLED\tSOURCE\tDESCRIPTION"); err != nil {
+			return err
+		}
 		for _, env := range environments {
 			source := "Local"
 			if env.IsUsingTemplate() {
 				source = fmt.Sprintf("Template(%s)", env.Config.Template)
 			}
 
-			fmt.Fprintf(w, "%s\t%t\t%s\t%s\n",
+			if _, err := fmt.Fprintf(w, "%s\t%t\t%s\t%s\n",
 				env.Name,
 				env.Config.Enabled,
 				source,
 				env.Config.Description,
-			)
+			); err != nil {
+				return err
+			}
 		}
 	}
 
-	w.Flush()
-	return nil
+	return w.Flush()
 }
