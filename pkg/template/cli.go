@@ -10,10 +10,18 @@ import (
 )
 
 func getDefaultTemplatesDir() string {
+	// First check for explicit state directory override
 	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
 		return filepath.Join(stateDir, "templates")
 	}
-	return "/var/lib/provisioner/templates"
+
+	// Auto-detect system installation
+	if _, err := os.Stat("/var/lib/provisioner"); err == nil {
+		return "/var/lib/provisioner/templates"
+	}
+
+	// Default for development
+	return "templates"
 }
 
 func RunAddCommand(args []string) error {

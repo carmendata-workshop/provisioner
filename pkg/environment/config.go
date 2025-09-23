@@ -277,9 +277,22 @@ func normalizeScheduleField(field interface{}) ([]string, error) {
 
 // getDefaultEnvironmentsDir returns the default environments directory
 func getDefaultEnvironmentsDir() string {
+	// First check for explicit environments directory override
 	if envDir := os.Getenv("PROVISIONER_ENVIRONMENTS_DIR"); envDir != "" {
 		return envDir
 	}
+
+	// Use config directory + environments if PROVISIONER_CONFIG_DIR is set
+	if configDir := os.Getenv("PROVISIONER_CONFIG_DIR"); configDir != "" {
+		return filepath.Join(configDir, "environments")
+	}
+
+	// Auto-detect system installation
+	if _, err := os.Stat("/etc/provisioner"); err == nil {
+		return "/etc/provisioner/environments"
+	}
+
+	// Default to relative path for development
 	return "environments"
 }
 
