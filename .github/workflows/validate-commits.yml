@@ -42,7 +42,7 @@ jobs:
           else
             echo "  ❌ Invalid commit message format"
             echo "     Expected: type(scope): description"
-            echo "     Example: feat: add new environment scheduler"
+            echo "     Example: feat: add new workspace scheduler"
             VALID=false
           fi
         done <<< "$COMMITS"

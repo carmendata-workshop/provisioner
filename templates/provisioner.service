@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenTofu Environment Provisioner
+Description=OpenTofu Workspace Provisioner
 Documentation=https://github.com/carmendata-workshop/provisioner
 After=network.target
 Wants=network.target
@@ -30,12 +30,12 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 LimitNOFILE=65536
 LimitNPROC=32768
 
-# Environment
-Environment=HOME=/var/lib/provisioner
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=PROVISIONER_CONFIG_DIR=/etc/provisioner
-Environment=PROVISIONER_STATE_DIR=/var/lib/provisioner
-Environment=PROVISIONER_LOG_DIR=/var/log/provisioner
+# Workspace
+Workspace=HOME=/var/lib/provisioner
+Workspace=PATH=/usr/local/bin:/usr/bin:/bin
+Workspace=PROVISIONER_CONFIG_DIR=/etc/provisioner
+Workspace=PROVISIONER_STATE_DIR=/var/lib/provisioner
+Workspace=PROVISIONER_LOG_DIR=/var/log/provisioner
 
 [Install]
 WantedBy=multi-user.target

@@ -13,15 +13,15 @@ import (
 )
 
 type Template struct {
-	Name         string    `json:"name"`
-	SourceURL    string    `json:"source_url"`
-	SourcePath   string    `json:"source_path,omitempty"`
-	SourceRef    string    `json:"source_ref"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Description  string    `json:"description,omitempty"`
-	Version      string    `json:"version,omitempty"`
-	ContentHash  string    `json:"content_hash,omitempty"`
+	Name        string    `json:"name"`
+	SourceURL   string    `json:"source_url"`
+	SourcePath  string    `json:"source_path,omitempty"`
+	SourceRef   string    `json:"source_ref"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Description string    `json:"description,omitempty"`
+	Version     string    `json:"version,omitempty"`
+	ContentHash string    `json:"content_hash,omitempty"`
 }
 
 type Registry struct {
@@ -191,7 +191,7 @@ func (m *Manager) UpdateTemplate(name string) error {
 		// No changes, just update timestamp
 		template.UpdatedAt = time.Now()
 	} else {
-		// Content changed - this will trigger environment redeployment
+		// Content changed - this will trigger workspace redeployment
 		template.ContentHash = newContentHash
 		template.UpdatedAt = time.Now()
 	}
@@ -280,11 +280,11 @@ terraform {
 
 resource "local_file" "template_marker" {
   content  = "Template: %s\nDeployed at: $${timestamp()}\n"
-  filename = "/tmp/$${var.environment_name}_%s_deployed.txt"
+  filename = "/tmp/$${var.workspace_name}_%s_deployed.txt"
 }
 
-variable "environment_name" {
-  description = "Name of the environment"
+variable "workspace_name" {
+  description = "Name of the workspace"
   type        = string
   default     = "template"
 }

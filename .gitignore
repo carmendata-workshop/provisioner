@@ -66,7 +66,7 @@ data/
 *.sqlite
 *.sqlite3
 
-# Environment variables
+# Workspace variables
 .env
 .env.local
 .env.*.local

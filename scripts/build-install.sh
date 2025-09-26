@@ -18,13 +18,13 @@ fi
 
 # Read template files
 SYSTEMD_SERVICE=$(cat "$TEMPLATE_DIR/provisioner.service")
-EXAMPLE_CONFIG_JSON=$(cat "examples/environments/simple-example/config.json")
-EXAMPLE_MAIN_TF=$(cat "examples/environments/simple-example/main.tf")
+EXAMPLE_CONFIG_JSON=$(cat "examples/workspaces/simple-example/config.json")
+EXAMPLE_MAIN_TF=$(cat "examples/workspaces/simple-example/main.tf")
 
 # Create embedded examples archives
 echo "📦 Creating embedded examples archive..."
 EXAMPLES_TAR=$(mktemp)
-tar -czf "$EXAMPLES_TAR" -C examples environments
+tar -czf "$EXAMPLES_TAR" -C examples workspaces
 EXAMPLES_BASE64=$(base64 -w 0 < "$EXAMPLES_TAR")
 rm "$EXAMPLES_TAR"
 
@@ -65,5 +65,5 @@ chmod +x "$OUTPUT_FILE"
 echo "✅ Generated: $OUTPUT_FILE"
 echo "📋 Template sources:"
 echo "  - Service: $TEMPLATE_DIR/provisioner.service"
-echo "  - Config: examples/environments/simple-example/config.json"
-echo "  - Terraform: examples/environments/simple-example/main.tf"
+echo "  - Config: examples/workspaces/simple-example/config.json"
+echo "  - Terraform: examples/workspaces/simple-example/main.tf"

@@ -99,11 +99,11 @@ jobs:
           COMMITS=$(git log --oneline --pretty=format:"- %s" HEAD)
           echo "## 🎯 Initial MVP Release" >> changelog.md
           echo "" >> changelog.md
-          echo "This is the first release of the OpenTofu Environment Scheduler MVP." >> changelog.md
+          echo "This is the first release of the OpenTofu Workspace Scheduler MVP." >> changelog.md
           echo "" >> changelog.md
           echo "### ✨ MVP Features" >> changelog.md
-          echo "- Automatic environment deployment and destruction based on CRON schedules" >> changelog.md
-          echo "- Multiple environment support with overlapping schedules" >> changelog.md
+          echo "- Automatic workspace deployment and destruction based on CRON schedules" >> changelog.md
+          echo "- Multiple workspace support with overlapping schedules" >> changelog.md
           echo "- State persistence across application restarts" >> changelog.md
           echo "- OpenTofu integration with automatic binary management" >> changelog.md
           echo "- Systemd service with FHS-compliant installation" >> changelog.md
@@ -184,7 +184,7 @@ jobs:
           -w -s"
 
         # Build all three binaries
-        for binary in provisioner environmentctl templatectl; do
+        for binary in provisioner workspacectl templatectl; do
           echo "Building $binary for ${{ matrix.os }}-${{ matrix.arch }}"
           CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags "$LDFLAGS" \
             -o bin/${binary}-${{ matrix.os }}-${{ matrix.arch }} ./cmd/${binary}
@@ -242,7 +242,7 @@ jobs:
         find . -name "*-linux-*" -o -name "*-darwin-*" -type f
 
         # Upload all binary files
-        for file in provisioner-* environmentctl-* templatectl-*; do
+        for file in provisioner-* workspacectl-* templatectl-*; do
           if [ -f "$file" ]; then
             echo "Uploading $file"
             gh release upload ${{ needs.check-version.outputs.new-version }} "$file"

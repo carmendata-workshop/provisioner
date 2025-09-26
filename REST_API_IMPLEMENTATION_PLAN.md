@@ -1,8 +1,8 @@
-# REST API Implementation Plan for OpenTofu Environment Scheduler
+# REST API Implementation Plan for OpenTofu Workspace Scheduler
 
 ## Overview
 
-This plan outlines adding REST API functionality to the existing `provisioner` binary, creating a unified daemon that provides both scheduled environment management and HTTP API access to all features.
+This plan outlines adding REST API functionality to the existing `provisioner` binary, creating a unified daemon that provides both scheduled workspace management and HTTP API access to all features.
 
 ## Architecture Decision
 
@@ -15,7 +15,7 @@ This plan outlines adding REST API functionality to the existing `provisioner` b
 
 ```bash
 ./bin/provisioner          # Scheduler daemon only (current)
-./bin/environmentctl        # Environment CLI
+./bin/workspacectl        # Workspace CLI
 ./bin/templatectl          # Template CLI
 ```
 
@@ -23,7 +23,7 @@ This plan outlines adding REST API functionality to the existing `provisioner` b
 
 ```bash
 ./bin/provisioner          # Scheduler daemon + Optional API server (enhanced)
-./bin/environmentctl        # Environment CLI (unchanged)
+./bin/workspacectl        # Workspace CLI (unchanged)
 ./bin/templatectl          # Template CLI (unchanged)
 ```
 
@@ -57,18 +57,18 @@ GET /scheduler/status          # Scheduler daemon status and statistics
 POST /scheduler/reload         # Reload configuration (trigger hot-reload)
 ```
 
-### Environment Operations
+### Workspace Operations
 ```http
-GET /environments              # List all environments
-POST /environments             # Create new environment
-GET /environments/{name}       # Get environment details and status
-PUT /environments/{name}       # Update environment configuration
-DELETE /environments/{name}    # Delete environment
-POST /environments/{name}/validate # Validate environment configuration
+GET /workspaces              # List all workspaces
+POST /workspaces             # Create new workspace
+GET /workspaces/{name}       # Get workspace details and status
+PUT /workspaces/{name}       # Update workspace configuration
+DELETE /workspaces/{name}    # Delete workspace
+POST /workspaces/{name}/validate # Validate workspace configuration
 
-POST /environments/{name}/deploy   # Manual deploy environment
-POST /environments/{name}/destroy  # Manual destroy environment
-GET /environments/{name}/logs      # Get environment logs
+POST /workspaces/{name}/deploy   # Manual deploy workspace
+POST /workspaces/{name}/destroy  # Manual destroy workspace
+GET /workspaces/{name}/logs      # Get workspace logs
 ```
 
 ### Template Operations
@@ -98,7 +98,7 @@ pkg/api/
 ├── server.go          # HTTP server setup and lifecycle
 ├── handlers/
 │   ├── health.go      # Health and system endpoints
-│   ├── environments.go # Environment management endpoints
+│   ├── workspaces.go # Workspace management endpoints
 │   ├── templates.go   # Template management endpoints
 │   └── scheduler.go   # Scheduler control endpoints
 ├── middleware/
@@ -154,20 +154,20 @@ func NewServer(scheduler *scheduler.Scheduler, port int) *Server {
 }
 ```
 
-#### 2.2 Environment Handlers
+#### 2.2 Workspace Handlers
 ```go
-// pkg/api/handlers/environments.go
-type EnvironmentHandler struct {
+// pkg/api/handlers/workspaces.go
+type WorkspaceHandler struct {
     scheduler *scheduler.Scheduler
 }
 
-func (h *EnvironmentHandler) ListEnvironments(w http.ResponseWriter, r *http.Request) {
-    // Use scheduler.LoadEnvironments() and return JSON
+func (h *WorkspaceHandler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
+    // Use scheduler.LoadWorkspaces() and return JSON
 }
 
-func (h *EnvironmentHandler) DeployEnvironment(w http.ResponseWriter, r *http.Request) {
-    envName := extractEnvName(r.URL.Path)
-    err := h.scheduler.ManualDeploy(envName)
+func (h *WorkspaceHandler) DeployWorkspace(w http.ResponseWriter, r *http.Request) {
+    workspaceName := extractWorkspaceName(r.URL.Path)
+    err := h.scheduler.ManualDeploy(workspaceName)
     // Return appropriate HTTP status and JSON response
 }
 ```
@@ -190,7 +190,7 @@ func (h *TemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) 
 #### 3.1 API Types
 ```go
 // pkg/api/types.go
-type EnvironmentResponse struct {
+type WorkspaceResponse struct {
     Name        string    `json:"name"`
     Enabled     bool      `json:"enabled"`
     Status      string    `json:"status"`
@@ -200,7 +200,7 @@ type EnvironmentResponse struct {
     UpdatedAt   time.Time `json:"updated_at"`
 }
 
-type CreateEnvironmentRequest struct {
+type CreateWorkspaceRequest struct {
     Name           string `json:"name"`
     Template       string `json:"template,omitempty"`
     Description    string `json:"description,omitempty"`
@@ -266,7 +266,7 @@ func CORS(next http.Handler) http.Handler {
 ### Phase 5: Integration with Existing Code
 
 #### 5.1 Reuse Existing Business Logic
-- Environment operations use existing `pkg/environment` functions
+- Workspace operations use existing `pkg/workspace` functions
 - Template operations use existing `pkg/template` methods
 - Manual deploy/destroy use existing `scheduler.ManualDeploy()` and `scheduler.ManualDestroy()`
 - Status and logs use existing `scheduler.ShowStatus()` and `scheduler.ShowLogs()`
@@ -277,39 +277,39 @@ func CORS(next http.Handler) http.Handler {
 - OpenTofu operations use same working directories
 
 #### 5.3 Configuration Loading
-- API server uses same environment discovery as CLI tools
+- API server uses same workspace discovery as CLI tools
 - Template management uses same registry.json file
 - All tools continue to work unchanged
 
 ## Example API Usage
 
-### Create Environment
+### Create Workspace
 ```bash
-curl -X POST http://localhost:8080/environments \
+curl -X POST http://localhost:8080/workspaces \
   -H "Content-Type: application/json" \
   -d '{
     "name": "dev-api",
     "template": "web-app",
-    "description": "Development environment via API",
+    "description": "Development workspace via API",
     "deploy_schedule": "0 9 * * 1-5",
     "destroy_schedule": "0 18 * * 1-5",
     "enabled": true
   }'
 ```
 
-### Deploy Environment
+### Deploy Workspace
 ```bash
-curl -X POST http://localhost:8080/environments/dev-api/deploy
+curl -X POST http://localhost:8080/workspaces/dev-api/deploy
 ```
 
-### Get Environment Status
+### Get Workspace Status
 ```bash
-curl http://localhost:8080/environments/dev-api
+curl http://localhost:8080/workspaces/dev-api
 ```
 
-### List All Environments
+### List All Workspaces
 ```bash
-curl http://localhost:8080/environments
+curl http://localhost:8080/workspaces
 ```
 
 ## Benefits
@@ -324,7 +324,7 @@ curl http://localhost:8080/environments
 ## Implementation Timeline
 
 - **Week 1**: Phase 1 - HTTP server foundation and basic structure
-- **Week 2**: Phase 2 - Core environment and template endpoints
+- **Week 2**: Phase 2 - Core workspace and template endpoints
 - **Week 3**: Phase 3 - Request/response types and error handling
 - **Week 4**: Phase 4 - Middleware, logging, and polish
 - **Week 5**: Integration testing and documentation
@@ -332,7 +332,7 @@ curl http://localhost:8080/environments
 ## Dependencies
 
 - **Standard Library Only**: Uses `net/http`, `encoding/json`, `log` (no external dependencies)
-- **Existing Packages**: Builds on `pkg/scheduler`, `pkg/template`, `pkg/environment`
+- **Existing Packages**: Builds on `pkg/scheduler`, `pkg/template`, `pkg/workspace`
 - **Minimal Changes**: Main changes in `cmd/provisioner/main.go` and new `pkg/api/` package
 
 This plan maintains the existing architecture while providing comprehensive REST API access to all provisioner functionality, enabling programmatic access and future web UI development.

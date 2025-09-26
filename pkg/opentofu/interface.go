@@ -1,11 +1,11 @@
 package opentofu
 
-import "provisioner/pkg/environment"
+import "provisioner/pkg/workspace"
 
 // TofuClient defines the interface for OpenTofu operations
 type TofuClient interface {
-	Deploy(env *environment.Environment) error
-	DestroyEnvironment(env *environment.Environment) error
+	Deploy(ws *workspace.Workspace) error
+	DestroyWorkspace(ws *workspace.Workspace) error
 }
 
 // Ensure Client implements TofuClient interface

@@ -1,4 +1,4 @@
-// OpenTofu Environment Provisioner
+// OpenTofu Workspace Provisioner
 // All indirect dependencies are from github.com/opentofu/tofudl
 // for secure OpenTofu binary management and cryptographic verification
 module provisioner

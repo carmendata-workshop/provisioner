@@ -10,57 +10,57 @@ func TestDestroyFailureHandling(t *testing.T) {
 	state := NewState()
 	scheduler := &Scheduler{state: state}
 
-	testEnv := "test-destroy-fail"
+	testWorkspace := "test-destroy-fail"
 	now := time.Now()
 
-	// Create environment in deployed state
-	state.SetEnvironmentStatus(testEnv, StatusDeployed)
-	envState := state.GetEnvironmentState(testEnv)
-	if envState.Status != StatusDeployed {
-		t.Fatalf("expected initial status %s, got %s", StatusDeployed, envState.Status)
+	// Create workspace in deployed state
+	state.SetWorkspaceStatus(testWorkspace, StatusDeployed)
+	workspaceState := state.GetWorkspaceState(testWorkspace)
+	if workspaceState.Status != StatusDeployed {
+		t.Fatalf("expected initial status %s, got %s", StatusDeployed, workspaceState.Status)
 	}
 
 	// Should destroy initially when deployed
 	schedules := []string{"* * * * *"} // Every minute
-	shouldDestroy := scheduler.ShouldRunDestroySchedule(schedules, now, envState)
+	shouldDestroy := scheduler.ShouldRunDestroySchedule(schedules, now, workspaceState)
 	if !shouldDestroy {
 		t.Error("expected to destroy initially when status is deployed")
 	}
 
 	// Simulate destroy failure
-	state.SetEnvironmentError(testEnv, false, "destroy failed")
-	envState = state.GetEnvironmentState(testEnv)
+	state.SetWorkspaceError(testWorkspace, false, "destroy failed")
+	workspaceState = state.GetWorkspaceState(testWorkspace)
 
-	if envState.Status != StatusDestroyFailed {
-		t.Errorf("expected status %s after destroy error, got %s", StatusDestroyFailed, envState.Status)
+	if workspaceState.Status != StatusDestroyFailed {
+		t.Errorf("expected status %s after destroy error, got %s", StatusDestroyFailed, workspaceState.Status)
 	}
 
-	if envState.LastDestroyError != "destroy failed" {
-		t.Errorf("expected error 'destroy failed', got '%s'", envState.LastDestroyError)
+	if workspaceState.LastDestroyError != "destroy failed" {
+		t.Errorf("expected error 'destroy failed', got '%s'", workspaceState.LastDestroyError)
 	}
 
 	// Should NOT destroy again while in failed state
-	shouldDestroy = scheduler.ShouldRunDestroySchedule(schedules, now.Add(time.Minute), envState)
+	shouldDestroy = scheduler.ShouldRunDestroySchedule(schedules, now.Add(time.Minute), workspaceState)
 	if shouldDestroy {
 		t.Error("expected NOT to destroy when in destroy failed state")
 	}
 
 	// Simulate config change
 	configTime := now.Add(2 * time.Minute)
-	state.SetEnvironmentConfigModified(testEnv, configTime)
-	envState = state.GetEnvironmentState(testEnv)
+	state.SetWorkspaceConfigModified(testWorkspace, configTime)
+	workspaceState = state.GetWorkspaceState(testWorkspace)
 
 	// Should reset to deployed state and clear error
-	if envState.Status != StatusDeployed {
-		t.Errorf("expected status %s after config change, got %s", StatusDeployed, envState.Status)
+	if workspaceState.Status != StatusDeployed {
+		t.Errorf("expected status %s after config change, got %s", StatusDeployed, workspaceState.Status)
 	}
 
-	if envState.LastDestroyError != "" {
-		t.Errorf("expected empty error after config change, got '%s'", envState.LastDestroyError)
+	if workspaceState.LastDestroyError != "" {
+		t.Errorf("expected empty error after config change, got '%s'", workspaceState.LastDestroyError)
 	}
 
 	// Should be able to destroy again after config change
-	shouldDestroy = scheduler.ShouldRunDestroySchedule(schedules, now.Add(3*time.Minute), envState)
+	shouldDestroy = scheduler.ShouldRunDestroySchedule(schedules, now.Add(3*time.Minute), workspaceState)
 	if !shouldDestroy {
 		t.Error("expected to destroy again after config change")
 	}
@@ -71,30 +71,30 @@ func TestDestroyFailureWithMultipleSchedules(t *testing.T) {
 	state := NewState()
 	scheduler := &Scheduler{state: state}
 
-	testEnv := "test-destroy-multi"
+	testWorkspace := "test-destroy-multi"
 	now := time.Now()
 
-	// Set environment to deployed state
-	state.SetEnvironmentStatus(testEnv, StatusDeployed)
-	envState := state.GetEnvironmentState(testEnv)
+	// Set workspace to deployed state
+	state.SetWorkspaceStatus(testWorkspace, StatusDeployed)
+	workspaceState := state.GetWorkspaceState(testWorkspace)
 	schedules := []string{"0 18 * * *", "0 22 * * *"} // 6 PM and 10 PM
 
 	// Set up a time when destruction should happen (after 6 PM)
 	testTime := time.Date(now.Year(), now.Month(), now.Day(), 18, 30, 0, 0, now.Location())
 
 	// Should destroy initially
-	shouldDestroy := scheduler.ShouldRunDestroySchedule(schedules, testTime, envState)
+	shouldDestroy := scheduler.ShouldRunDestroySchedule(schedules, testTime, workspaceState)
 	if !shouldDestroy {
 		t.Error("expected to destroy at 6:30 PM when 6 PM schedule should have run")
 	}
 
 	// Simulate failure
-	state.SetEnvironmentError(testEnv, false, "destroy failed")
-	envState = state.GetEnvironmentState(testEnv)
+	state.SetWorkspaceError(testWorkspace, false, "destroy failed")
+	workspaceState = state.GetWorkspaceState(testWorkspace)
 
 	// Should NOT destroy again even though 10 PM schedule will come
 	testTime = time.Date(now.Year(), now.Month(), now.Day(), 22, 30, 0, 0, now.Location())
-	shouldDestroy = scheduler.ShouldRunDestroySchedule(schedules, testTime, envState)
+	shouldDestroy = scheduler.ShouldRunDestroySchedule(schedules, testTime, workspaceState)
 	if shouldDestroy {
 		t.Error("expected NOT to destroy at 10:30 PM when in destroy failed state")
 	}
@@ -104,9 +104,9 @@ func TestStateTransitions(t *testing.T) {
 	// Test all possible state transitions with config changes
 	tests := []struct {
 		name           string
-		initialStatus  EnvironmentStatus
+		initialStatus  WorkspaceStatus
 		configChange   bool
-		expectedStatus EnvironmentStatus
+		expectedStatus WorkspaceStatus
 	}{
 		{"deploy_failed_with_config_change", StatusDeployFailed, true, StatusDestroyed},
 		{"destroy_failed_with_config_change", StatusDestroyFailed, true, StatusDeployed},
@@ -117,19 +117,19 @@ func TestStateTransitions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := NewState()
-			testEnv := "test-env"
+			testWorkspace := "test-workspace"
 
 			// Set initial status
-			state.SetEnvironmentStatus(testEnv, tt.initialStatus)
-			envState := state.GetEnvironmentState(testEnv)
+			state.SetWorkspaceStatus(testWorkspace, tt.initialStatus)
+			workspaceState := state.GetWorkspaceState(testWorkspace)
 
 			if tt.configChange {
-				state.SetEnvironmentConfigModified(testEnv, time.Now())
-				envState = state.GetEnvironmentState(testEnv)
+				state.SetWorkspaceConfigModified(testWorkspace, time.Now())
+				workspaceState = state.GetWorkspaceState(testWorkspace)
 			}
 
-			if envState.Status != tt.expectedStatus {
-				t.Errorf("expected status %s, got %s", tt.expectedStatus, envState.Status)
+			if workspaceState.Status != tt.expectedStatus {
+				t.Errorf("expected status %s, got %s", tt.expectedStatus, workspaceState.Status)
 			}
 		})
 	}

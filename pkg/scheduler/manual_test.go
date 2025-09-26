@@ -13,11 +13,11 @@ func TestManualDeploy(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create environment configuration
-	envName := "test-env"
-	envDir := filepath.Join(tempDir, "environments", envName)
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("Failed to create environment directory: %v", err)
+	// Create workspace configuration
+	workspaceName := "test-workspace"
+	workspaceDir := filepath.Join(tempDir, "workspaces", workspaceName)
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
 	}
 
 	// Create config.json
@@ -26,13 +26,13 @@ func TestManualDeploy(t *testing.T) {
 		"deploy_schedule": "0 9 * * *",
 		"destroy_schedule": "0 17 * * *"
 	}`
-	if err := os.WriteFile(filepath.Join(envDir, "config.json"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "config.json"), []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
 	// Create main.tf
 	tfContent := `resource "null_resource" "test" {}`
-	if err := os.WriteFile(filepath.Join(envDir, "main.tf"), []byte(tfContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "main.tf"), []byte(tfContent), 0644); err != nil {
 		t.Fatalf("Failed to create main.tf: %v", err)
 	}
 
@@ -44,16 +44,16 @@ func TestManualDeploy(t *testing.T) {
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
 	// Test manual deploy
-	err := sched.ManualDeploy(envName)
+	err := sched.ManualDeploy(workspaceName)
 	if err != nil {
 		t.Fatalf("Manual deploy failed: %v", err)
 	}
@@ -62,16 +62,16 @@ func TestManualDeploy(t *testing.T) {
 	if mockClient.DeployCallCount != 1 {
 		t.Errorf("Expected Deploy to be called once, got %d calls", mockClient.DeployCallCount)
 	}
-	if len(mockClient.DeployCallEnvs) == 0 || mockClient.DeployCallEnvs[0].Name != envName {
-		t.Errorf("Deploy was not called with correct environment. Expected %s, got %v", envName, mockClient.DeployCallEnvs)
+	if len(mockClient.DeployCallWorkspaces) == 0 || mockClient.DeployCallWorkspaces[0].Name != workspaceName {
+		t.Errorf("Deploy was not called with correct workspace. Expected %s, got %v", workspaceName, mockClient.DeployCallWorkspaces)
 	}
 
 	// Verify state was updated
-	envState := sched.state.GetEnvironmentState(envName)
-	if envState.Status != StatusDeployed {
-		t.Errorf("Expected status %s, got %s", StatusDeployed, envState.Status)
+	workspaceState := sched.state.GetWorkspaceState(workspaceName)
+	if workspaceState.Status != StatusDeployed {
+		t.Errorf("Expected status %s, got %s", StatusDeployed, workspaceState.Status)
 	}
-	if envState.LastDeployed == nil {
+	if workspaceState.LastDeployed == nil {
 		t.Error("LastDeployed should not be nil after successful deployment")
 	}
 }
@@ -80,11 +80,11 @@ func TestManualDestroy(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create environment configuration
-	envName := "test-env"
-	envDir := filepath.Join(tempDir, "environments", envName)
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("Failed to create environment directory: %v", err)
+	// Create workspace configuration
+	workspaceName := "test-workspace"
+	workspaceDir := filepath.Join(tempDir, "workspaces", workspaceName)
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
 	}
 
 	// Create config.json
@@ -93,13 +93,13 @@ func TestManualDestroy(t *testing.T) {
 		"deploy_schedule": "0 9 * * *",
 		"destroy_schedule": "0 17 * * *"
 	}`
-	if err := os.WriteFile(filepath.Join(envDir, "config.json"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "config.json"), []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
 	// Create main.tf
 	tfContent := `resource "null_resource" "test" {}`
-	if err := os.WriteFile(filepath.Join(envDir, "main.tf"), []byte(tfContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "main.tf"), []byte(tfContent), 0644); err != nil {
 		t.Fatalf("Failed to create main.tf: %v", err)
 	}
 
@@ -111,82 +111,82 @@ func TestManualDestroy(t *testing.T) {
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
 	// Set initial state to deployed
-	sched.state.SetEnvironmentStatus(envName, StatusDeployed)
+	sched.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
 
 	// Test manual destroy
-	err := sched.ManualDestroy(envName)
+	err := sched.ManualDestroy(workspaceName)
 	if err != nil {
 		t.Fatalf("Manual destroy failed: %v", err)
 	}
 
 	// Verify destruction was called
 	if mockClient.DestroyCallCount != 1 {
-		t.Errorf("Expected DestroyEnvironment to be called once, got %d calls", mockClient.DestroyCallCount)
+		t.Errorf("Expected DestroyWorkspace to be called once, got %d calls", mockClient.DestroyCallCount)
 	}
-	if len(mockClient.DestroyCallEnvs) == 0 || mockClient.DestroyCallEnvs[0].Name != envName {
-		t.Errorf("DestroyEnvironment was not called with correct environment. Expected %s, got %v", envName, mockClient.DestroyCallEnvs)
+	if len(mockClient.DestroyCallWorkspaces) == 0 || mockClient.DestroyCallWorkspaces[0].Name != workspaceName {
+		t.Errorf("DestroyWorkspace was not called with correct workspace. Expected %s, got %v", workspaceName, mockClient.DestroyCallWorkspaces)
 	}
 
 	// Verify state was updated
-	envState := sched.state.GetEnvironmentState(envName)
-	if envState.Status != StatusDestroyed {
-		t.Errorf("Expected status %s, got %s", StatusDestroyed, envState.Status)
+	workspaceState := sched.state.GetWorkspaceState(workspaceName)
+	if workspaceState.Status != StatusDestroyed {
+		t.Errorf("Expected status %s, got %s", StatusDestroyed, workspaceState.Status)
 	}
-	if envState.LastDestroyed == nil {
+	if workspaceState.LastDestroyed == nil {
 		t.Error("LastDestroyed should not be nil after successful destruction")
 	}
 }
 
-func TestManualDeployNonExistentEnvironment(t *testing.T) {
+func TestManualDeployNonExistentWorkspace(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create empty environments directory
-	if err := os.MkdirAll(filepath.Join(tempDir, "environments"), 0755); err != nil {
-		t.Fatalf("Failed to create environments directory: %v", err)
+	// Create empty workspaces directory
+	if err := os.MkdirAll(filepath.Join(tempDir, "workspaces"), 0755); err != nil {
+		t.Fatalf("Failed to create workspaces directory: %v", err)
 	}
 
-	// Create scheduler with no environments
+	// Create scheduler with no workspaces
 	sched := NewWithClient(&opentofu.MockTofuClient{})
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load empty environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load empty workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
-	// Test manual deploy of non-existent environment
+	// Test manual deploy of non-existent workspace
 	err := sched.ManualDeploy("nonexistent")
 	if err == nil {
-		t.Fatal("Expected error for non-existent environment, got nil")
+		t.Fatal("Expected error for non-existent workspace, got nil")
 	}
-	if err.Error() != "environment 'nonexistent' not found in configuration" {
+	if err.Error() != "workspace 'nonexistent' not found in configuration" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
 
-func TestManualDeployDisabledEnvironment(t *testing.T) {
+func TestManualDeployDisabledWorkspace(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create environment configuration (disabled)
-	envName := "disabled-env"
-	envDir := filepath.Join(tempDir, "environments", envName)
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("Failed to create environment directory: %v", err)
+	// Create workspace configuration (disabled)
+	workspaceName := "disabled-workspace"
+	workspaceDir := filepath.Join(tempDir, "workspaces", workspaceName)
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
 	}
 
 	// Create config.json with enabled: false
@@ -195,13 +195,13 @@ func TestManualDeployDisabledEnvironment(t *testing.T) {
 		"deploy_schedule": "0 9 * * *",
 		"destroy_schedule": "0 17 * * *"
 	}`
-	if err := os.WriteFile(filepath.Join(envDir, "config.json"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "config.json"), []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
 	// Create main.tf
 	tfContent := `resource "null_resource" "test" {}`
-	if err := os.WriteFile(filepath.Join(envDir, "main.tf"), []byte(tfContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "main.tf"), []byte(tfContent), 0644); err != nil {
 		t.Fatalf("Failed to create main.tf: %v", err)
 	}
 
@@ -210,33 +210,33 @@ func TestManualDeployDisabledEnvironment(t *testing.T) {
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
-	// Test manual deploy of disabled environment
-	err := sched.ManualDeploy(envName)
+	// Test manual deploy of disabled workspace
+	err := sched.ManualDeploy(workspaceName)
 	if err == nil {
-		t.Fatal("Expected error for disabled environment, got nil")
+		t.Fatal("Expected error for disabled workspace, got nil")
 	}
-	if err.Error() != "environment 'disabled-env' is disabled in configuration" {
+	if err.Error() != "workspace 'disabled-workspace' is disabled in configuration" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
 
-func TestManualDeployBusyEnvironment(t *testing.T) {
+func TestManualDeployBusyWorkspace(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create environment configuration
-	envName := "busy-env"
-	envDir := filepath.Join(tempDir, "environments", envName)
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("Failed to create environment directory: %v", err)
+	// Create workspace configuration
+	workspaceName := "busy-workspace"
+	workspaceDir := filepath.Join(tempDir, "workspaces", workspaceName)
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
 	}
 
 	// Create config.json
@@ -245,13 +245,13 @@ func TestManualDeployBusyEnvironment(t *testing.T) {
 		"deploy_schedule": "0 9 * * *",
 		"destroy_schedule": "0 17 * * *"
 	}`
-	if err := os.WriteFile(filepath.Join(envDir, "config.json"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "config.json"), []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
 	// Create main.tf
 	tfContent := `resource "null_resource" "test" {}`
-	if err := os.WriteFile(filepath.Join(envDir, "main.tf"), []byte(tfContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "main.tf"), []byte(tfContent), 0644); err != nil {
 		t.Fatalf("Failed to create main.tf: %v", err)
 	}
 
@@ -260,33 +260,33 @@ func TestManualDeployBusyEnvironment(t *testing.T) {
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
-	// Set environment as currently deploying
-	sched.state.SetEnvironmentStatus(envName, StatusDeploying)
+	// Set workspace as currently deploying
+	sched.state.SetWorkspaceStatus(workspaceName, StatusDeploying)
 
-	// Test manual deploy of busy environment
-	err := sched.ManualDeploy(envName)
+	// Test manual deploy of busy workspace
+	err := sched.ManualDeploy(workspaceName)
 	if err == nil {
-		t.Fatal("Expected error for busy environment, got nil")
+		t.Fatal("Expected error for busy workspace, got nil")
 	}
-	if err.Error() != "environment 'busy-env' is currently deploying, cannot deploy" {
+	if err.Error() != "workspace 'busy-workspace' is currently deploying, cannot deploy" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 
 	// Test with destroying status
-	sched.state.SetEnvironmentStatus(envName, StatusDestroying)
-	err = sched.ManualDestroy(envName)
+	sched.state.SetWorkspaceStatus(workspaceName, StatusDestroying)
+	err = sched.ManualDestroy(workspaceName)
 	if err == nil {
-		t.Fatal("Expected error for busy environment, got nil")
+		t.Fatal("Expected error for busy workspace, got nil")
 	}
-	if err.Error() != "environment 'busy-env' is currently destroying, cannot destroy" {
+	if err.Error() != "workspace 'busy-workspace' is currently destroying, cannot destroy" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
@@ -295,11 +295,11 @@ func TestManualDeployWithError(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create environment configuration
-	envName := "error-env"
-	envDir := filepath.Join(tempDir, "environments", envName)
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("Failed to create environment directory: %v", err)
+	// Create workspace configuration
+	workspaceName := "error-workspace"
+	workspaceDir := filepath.Join(tempDir, "workspaces", workspaceName)
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
 	}
 
 	// Create config.json
@@ -308,13 +308,13 @@ func TestManualDeployWithError(t *testing.T) {
 		"deploy_schedule": "0 9 * * *",
 		"destroy_schedule": "0 17 * * *"
 	}`
-	if err := os.WriteFile(filepath.Join(envDir, "config.json"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "config.json"), []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
 	// Create main.tf
 	tfContent := `resource "null_resource" "test" {}`
-	if err := os.WriteFile(filepath.Join(envDir, "main.tf"), []byte(tfContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "main.tf"), []byte(tfContent), 0644); err != nil {
 		t.Fatalf("Failed to create main.tf: %v", err)
 	}
 
@@ -327,26 +327,26 @@ func TestManualDeployWithError(t *testing.T) {
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
 	// Test manual deploy (should succeed even though deployment fails)
-	err := sched.ManualDeploy(envName)
+	err := sched.ManualDeploy(workspaceName)
 	if err != nil {
 		t.Fatalf("Manual deploy should not return error even when deployment fails: %v", err)
 	}
 
 	// Verify state reflects the error
-	envState := sched.state.GetEnvironmentState(envName)
-	if envState.Status != StatusDeployFailed {
-		t.Errorf("Expected status %s, got %s", StatusDeployFailed, envState.Status)
+	workspaceState := sched.state.GetWorkspaceState(workspaceName)
+	if workspaceState.Status != StatusDeployFailed {
+		t.Errorf("Expected status %s, got %s", StatusDeployFailed, workspaceState.Status)
 	}
-	if envState.LastDeployError == "" {
+	if workspaceState.LastDeployError == "" {
 		t.Error("LastDeployError should not be empty after failed deployment")
 	}
 }
@@ -355,11 +355,11 @@ func TestManualOperationsWithFailedStates(t *testing.T) {
 	tempDir := t.TempDir()
 	stateFile := filepath.Join(tempDir, "state.json")
 
-	// Create environment configuration
-	envName := "failed-env"
-	envDir := filepath.Join(tempDir, "environments", envName)
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("Failed to create environment directory: %v", err)
+	// Create workspace configuration
+	workspaceName := "failed-workspace"
+	workspaceDir := filepath.Join(tempDir, "workspaces", workspaceName)
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
 	}
 
 	// Create config.json
@@ -368,13 +368,13 @@ func TestManualOperationsWithFailedStates(t *testing.T) {
 		"deploy_schedule": "0 9 * * *",
 		"destroy_schedule": "0 17 * * *"
 	}`
-	if err := os.WriteFile(filepath.Join(envDir, "config.json"), []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "config.json"), []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to create config.json: %v", err)
 	}
 
 	// Create main.tf
 	tfContent := `resource "null_resource" "test" {}`
-	if err := os.WriteFile(filepath.Join(envDir, "main.tf"), []byte(tfContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "main.tf"), []byte(tfContent), 0644); err != nil {
 		t.Fatalf("Failed to create main.tf: %v", err)
 	}
 
@@ -386,24 +386,24 @@ func TestManualOperationsWithFailedStates(t *testing.T) {
 	sched.statePath = stateFile
 	sched.configDir = tempDir
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		t.Fatalf("Failed to load environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		t.Fatalf("Failed to load workspaces: %v", err)
 	}
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
 
 	// Test manual deploy when in deploy failed state
-	sched.state.SetEnvironmentError(envName, true, "Previous deploy failed")
-	err := sched.ManualDeploy(envName)
+	sched.state.SetWorkspaceError(workspaceName, true, "Previous deploy failed")
+	err := sched.ManualDeploy(workspaceName)
 	if err != nil {
 		t.Fatalf("Manual deploy should work even when in deploy failed state: %v", err)
 	}
 
 	// Test manual destroy when in destroy failed state
-	sched.state.SetEnvironmentError(envName, false, "Previous destroy failed")
-	err = sched.ManualDestroy(envName)
+	sched.state.SetWorkspaceError(workspaceName, false, "Previous destroy failed")
+	err = sched.ManualDestroy(workspaceName)
 	if err != nil {
 		t.Fatalf("Manual destroy should work even when in destroy failed state: %v", err)
 	}

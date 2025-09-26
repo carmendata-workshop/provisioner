@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# OpenTofu Environment Provisioner Installation Script
+# OpenTofu Workspace Provisioner Installation Script
 set -e
 
 # Configuration
@@ -14,7 +14,7 @@ REPO_OWNER="carmendata-workshop"
 REPO_NAME="provisioner"
 VERSION="${1:-latest}"  # Allow version override as first argument
 
-echo "🚀 Installing OpenTofu Environment Provisioner (${VERSION})..."
+echo "🚀 Installing OpenTofu Workspace Provisioner (${VERSION})..."
 
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
@@ -42,7 +42,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 cd "$TEMP_DIR"
 
 # Download all binaries
-BINARIES="provisioner environmentctl templatectl"
+BINARIES="provisioner workspacectl templatectl"
 if [ "$VERSION" = "latest" ]; then
     echo "🔍 Finding latest release..."
     BASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download"
@@ -78,7 +78,7 @@ fi
 # Create directories following FHS standards
 echo "📁 Creating directories..."
 mkdir -p "$INSTALL_DIR"              # /opt/provisioner - binary
-mkdir -p "$CONFIG_DIR/environments"  # /etc/provisioner/environments - configs
+mkdir -p "$CONFIG_DIR/workspaces"  # /etc/provisioner/workspaces - configs
 mkdir -p "$STATE_DIR"                # /var/lib/provisioner - state data
 mkdir -p "$LOG_DIR"                  # /var/log/provisioner - log files
 
@@ -121,11 +121,11 @@ for binary in $BINARIES; do
     fi
 done
 
-# Install example environments if none exist
-ENV_COUNT=$(find "$CONFIG_DIR/environments" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+# Install example workspaces if none exist
+ENV_COUNT=$(find "$CONFIG_DIR/workspaces" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
 
 if [ "$ENV_COUNT" -eq 0 ]; then
-    echo "📋 Installing example environments (no environments found)..."
+    echo "📋 Installing example workspaces (no workspaces found)..."
 
     # Extract embedded examples archive
     EXAMPLES_ARCHIVE=$(mktemp)
@@ -134,35 +134,35 @@ if [ "$ENV_COUNT" -eq 0 ]; then
 EOF
 
     if tar -xzf "$EXAMPLES_ARCHIVE" -C "$TEMP_DIR" 2>/dev/null; then
-        if [ -d "$TEMP_DIR/environments" ]; then
-            echo "📦 Installing example environments..."
-            cp -r "$TEMP_DIR/environments"/* "$CONFIG_DIR/environments/"
-            echo "✅ Example environments installed:"
-            ls -1 "$CONFIG_DIR/environments/" | sed 's/^/  - /'
+        if [ -d "$TEMP_DIR/workspaces" ]; then
+            echo "📦 Installing example workspaces..."
+            cp -r "$TEMP_DIR/workspaces"/* "$CONFIG_DIR/workspaces/"
+            echo "✅ Example workspaces installed:"
+            ls -1 "$CONFIG_DIR/workspaces/" | sed 's/^/  - /'
         else
             echo "⚠️  Malformed examples archive, creating basic example..."
-            mkdir -p "$CONFIG_DIR/environments/simple-example"
-            cat > "$CONFIG_DIR/environments/simple-example/config.json" << 'EOF'
+            mkdir -p "$CONFIG_DIR/workspaces/simple-example"
+            cat > "$CONFIG_DIR/workspaces/simple-example/config.json" << 'EOF'
 {{EXAMPLE_CONFIG_JSON}}
 EOF
-            cat > "$CONFIG_DIR/environments/simple-example/main.tf" << 'EOF'
+            cat > "$CONFIG_DIR/workspaces/simple-example/main.tf" << 'EOF'
 {{EXAMPLE_MAIN_TF}}
 EOF
         fi
     else
         echo "⚠️  Failed to extract examples archive, creating basic example..."
-        mkdir -p "$CONFIG_DIR/environments/simple-example"
-        cat > "$CONFIG_DIR/environments/simple-example/config.json" << 'EOF'
+        mkdir -p "$CONFIG_DIR/workspaces/simple-example"
+        cat > "$CONFIG_DIR/workspaces/simple-example/config.json" << 'EOF'
 {{EXAMPLE_CONFIG_JSON}}
 EOF
-        cat > "$CONFIG_DIR/environments/simple-example/main.tf" << 'EOF'
+        cat > "$CONFIG_DIR/workspaces/simple-example/main.tf" << 'EOF'
 {{EXAMPLE_MAIN_TF}}
 EOF
     fi
 
     rm -f "$EXAMPLES_ARCHIVE"
 else
-    echo "📋 Skipping example environments (environments already exist)..."
+    echo "📋 Skipping example workspaces (workspaces already exist)..."
 fi
 
 # Install example templates using templatectl
@@ -257,24 +257,24 @@ echo ""
 echo "📁 Binaries: $INSTALL_DIR/"
 
 # Check if we just installed examples
-EXAMPLE_ENVS=$(find "$CONFIG_DIR/environments" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+EXAMPLE_ENVS=$(find "$CONFIG_DIR/workspaces" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
 EXAMPLE_TEMPLATES=$(find "$STATE_DIR/templates" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
 
 if [ "$EXAMPLE_ENVS" -gt 0 ] || [ "$EXAMPLE_TEMPLATES" -gt 0 ]; then
     echo "📝 Examples installed:"
-    [ "$EXAMPLE_ENVS" -gt 0 ] && echo "  - Environments: $CONFIG_DIR/environments/"
+    [ "$EXAMPLE_ENVS" -gt 0 ] && echo "  - Workspaces: $CONFIG_DIR/workspaces/"
     [ "$EXAMPLE_TEMPLATES" -gt 0 ] && echo "  - Templates: available via templatectl"
     echo ""
     echo "Next steps:"
-    echo "1. Review examples: environmentctl list && templatectl list"
-    echo "2. Enable environments by editing their config.json files"
-    echo "3. Create your own environments and templates"
+    echo "1. Review examples: workspacectl list && templatectl list"
+    echo "2. Enable workspaces by editing their config.json files"
+    echo "3. Create your own workspaces and templates"
     echo "4. Restart service to pick up changes: sudo systemctl restart $SERVICE_NAME"
     echo "5. View logs: sudo journalctl -u $SERVICE_NAME -f"
 else
     echo ""
     echo "Next steps:"
-    echo "1. Create environments and templates"
+    echo "1. Create workspaces and templates"
     echo "2. View service logs: sudo journalctl -u $SERVICE_NAME -f"
     echo "3. Check service status: sudo systemctl status $SERVICE_NAME"
 fi
@@ -294,10 +294,10 @@ echo "  - System logs: journalctl -u $SERVICE_NAME"
 echo ""
 echo "💻 Available commands:"
 echo "  - provisioner --help        # Scheduler daemon"
-echo "  - environmentctl --help     # Environment management"
+echo "  - workspacectl --help     # Workspace management"
 echo "  - templatectl --help        # Template management"
 echo ""
 echo "📖 Quick examples:"
-echo "  environmentctl list                    # List environments"
-echo "  environmentctl deploy my-app          # Deploy immediately"
+echo "  workspacectl list                    # List workspaces"
+echo "  workspacectl deploy my-app          # Deploy immediately"
 echo "  templatectl list                      # List templates"

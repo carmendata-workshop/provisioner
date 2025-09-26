@@ -15,12 +15,12 @@ import (
 func printUsage() {
 	fmt.Printf(`Usage: %s [OPTIONS]
 
-OpenTofu Environment Scheduler - Automatically manages OpenTofu environments on CRON schedules.
+OpenTofu Workspace Scheduler - Automatically manages OpenTofu workspaces on CRON schedules.
 
-This daemon runs in the background and deploys/destroys environments based on their configured schedules.
+This daemon runs in the background and deploys/destroys workspaces based on their configured schedules.
 
 Related Tools:
-  environmentctl    Manage environments (list, deploy, destroy, status, logs)
+  workspacectl    Manage workspaces (list, deploy, destroy, status, logs)
   templatectl      Manage templates (add, list, show, update, remove)
 
 Options:
@@ -33,9 +33,9 @@ Examples:
   %s --version     # Show version information
 
 For manual operations, use the related CLI tools:
-  environmentctl list              # List all environments
-  environmentctl deploy my-app     # Deploy environment immediately
-  environmentctl status my-app     # Show environment status
+  workspacectl list              # List all workspaces
+  workspacectl deploy my-app     # Deploy workspace immediately
+  workspacectl status my-app     # Show workspace status
   templatectl list                 # List all templates
 `, os.Args[0], os.Args[0], os.Args[0])
 }
@@ -70,14 +70,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	logging.LogSystemd("Starting Environment Scheduler %s", version.GetVersion())
+	logging.LogSystemd("Starting Workspace Scheduler %s", version.GetVersion())
 
 	// Initialize scheduler
 	sched := scheduler.New()
 
-	// Load environments and state
-	if err := sched.LoadEnvironments(); err != nil {
-		logging.LogSystemd("Error loading environments: %v", err)
+	// Load workspaces and state
+	if err := sched.LoadWorkspaces(); err != nil {
+		logging.LogSystemd("Error loading workspaces: %v", err)
 	}
 
 	if err := sched.LoadState(); err != nil {
@@ -91,7 +91,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	logging.LogSystemd("Environment Scheduler started. Press Ctrl+C to stop.")
+	logging.LogSystemd("Workspace Scheduler started. Press Ctrl+C to stop.")
 
 	<-sigChan
 	logging.LogSystemd("Shutting down...")
@@ -104,5 +104,5 @@ func main() {
 	// Close log files
 	logging.GetLogger().Close()
 
-	logging.LogSystemd("Environment Scheduler stopped.")
+	logging.LogSystemd("Workspace Scheduler stopped.")
 }

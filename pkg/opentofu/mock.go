@@ -1,69 +1,69 @@
 package opentofu
 
-import "provisioner/pkg/environment"
+import "provisioner/pkg/workspace"
 
 // MockTofuClient is a mock implementation of TofuClient for testing
 type MockTofuClient struct {
-	DeployFunc       func(env *environment.Environment) error
-	DestroyFunc      func(env *environment.Environment) error
+	DeployFunc       func(ws *workspace.Workspace) error
+	DestroyFunc      func(ws *workspace.Workspace) error
 	DeployCallCount  int
 	DestroyCallCount int
-	DeployCallEnvs   []*environment.Environment
-	DestroyCallEnvs  []*environment.Environment
+	DeployCallWorkspaces   []*workspace.Workspace
+	DestroyCallWorkspaces  []*workspace.Workspace
 }
 
 // NewMockTofuClient creates a new mock client with default success behavior
 func NewMockTofuClient() *MockTofuClient {
 	return &MockTofuClient{
-		DeployCallEnvs:  make([]*environment.Environment, 0),
-		DestroyCallEnvs: make([]*environment.Environment, 0),
+		DeployCallWorkspaces:  make([]*workspace.Workspace, 0),
+		DestroyCallWorkspaces: make([]*workspace.Workspace, 0),
 	}
 }
 
 // Deploy mocks the deploy operation
-func (m *MockTofuClient) Deploy(env *environment.Environment) error {
+func (m *MockTofuClient) Deploy(ws *workspace.Workspace) error {
 	m.DeployCallCount++
-	m.DeployCallEnvs = append(m.DeployCallEnvs, env)
+	m.DeployCallWorkspaces = append(m.DeployCallWorkspaces, ws)
 
 	if m.DeployFunc != nil {
-		return m.DeployFunc(env)
+		return m.DeployFunc(ws)
 	}
 
 	// Default success behavior
 	return nil
 }
 
-// DestroyEnvironment mocks the destroy operation
-func (m *MockTofuClient) DestroyEnvironment(env *environment.Environment) error {
+// DestroyWorkspace mocks the destroy operation
+func (m *MockTofuClient) DestroyWorkspace(ws *workspace.Workspace) error {
 	m.DestroyCallCount++
-	m.DestroyCallEnvs = append(m.DestroyCallEnvs, env)
+	m.DestroyCallWorkspaces = append(m.DestroyCallWorkspaces, ws)
 
 	if m.DestroyFunc != nil {
-		return m.DestroyFunc(env)
+		return m.DestroyFunc(ws)
 	}
 
 	// Default success behavior
 	return nil
 }
 
-// Reset clears all call counts and environments
+// Reset clears all call counts and workspaces
 func (m *MockTofuClient) Reset() {
 	m.DeployCallCount = 0
 	m.DestroyCallCount = 0
-	m.DeployCallEnvs = m.DeployCallEnvs[:0]
-	m.DestroyCallEnvs = m.DestroyCallEnvs[:0]
+	m.DeployCallWorkspaces = m.DeployCallWorkspaces[:0]
+	m.DestroyCallWorkspaces = m.DestroyCallWorkspaces[:0]
 }
 
 // SetDeployError configures the mock to return an error on deploy
 func (m *MockTofuClient) SetDeployError(err error) {
-	m.DeployFunc = func(*environment.Environment) error {
+	m.DeployFunc = func(*workspace.Workspace) error {
 		return err
 	}
 }
 
 // SetDestroyError configures the mock to return an error on destroy
 func (m *MockTofuClient) SetDestroyError(err error) {
-	m.DestroyFunc = func(*environment.Environment) error {
+	m.DestroyFunc = func(*workspace.Workspace) error {
 		return err
 	}
 }
@@ -78,20 +78,20 @@ func (m *MockTofuClient) SetDestroySuccess() {
 	m.DestroyFunc = nil
 }
 
-// GetLastDeployEnv returns the environment from the most recent deploy call
-func (m *MockTofuClient) GetLastDeployEnv() *environment.Environment {
-	if len(m.DeployCallEnvs) == 0 {
+// GetLastDeployWorkspace returns the workspace from the most recent deploy call
+func (m *MockTofuClient) GetLastDeployWorkspace() *workspace.Workspace {
+	if len(m.DeployCallWorkspaces) == 0 {
 		return nil
 	}
-	return m.DeployCallEnvs[len(m.DeployCallEnvs)-1]
+	return m.DeployCallWorkspaces[len(m.DeployCallWorkspaces)-1]
 }
 
-// GetLastDestroyEnv returns the environment from the most recent destroy call
-func (m *MockTofuClient) GetLastDestroyEnv() *environment.Environment {
-	if len(m.DestroyCallEnvs) == 0 {
+// GetLastDestroyWorkspace returns the workspace from the most recent destroy call
+func (m *MockTofuClient) GetLastDestroyWorkspace() *workspace.Workspace {
+	if len(m.DestroyCallWorkspaces) == 0 {
 		return nil
 	}
-	return m.DestroyCallEnvs[len(m.DestroyCallEnvs)-1]
+	return m.DestroyCallWorkspaces[len(m.DestroyCallWorkspaces)-1]
 }
 
 // Ensure MockTofuClient implements TofuClient interface

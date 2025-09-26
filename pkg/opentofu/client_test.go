@@ -19,7 +19,7 @@ func TestCleanWorkingDirectory(t *testing.T) {
 		"terraform.tfstate",
 		"terraform.tfstate.backup",
 		".terraform.lock.hcl",
-		"environment.tfvars",
+		"workspace.tfvars",
 		"custom.tfvars.json",
 		"terraform.tfvars",
 		".provisioner-metadata.json",
@@ -123,11 +123,11 @@ func TestCopyDirectoryFilesWithCleanup(t *testing.T) {
 
 	// Pre-populate working directory with old files
 	oldFiles := map[string]string{
-		"main.tf":                     "# Old main.tf content",
-		"old-variables.tf":            "# This file was deleted from template",
-		"removed-module.tf":           "# This module was removed",
-		"terraform.tfstate":           "# Terraform state - should be preserved",
-		"environment.tfvars":          "# Environment vars - should be preserved",
+		"main.tf":                    "# Old main.tf content",
+		"old-variables.tf":           "# This file was deleted from template",
+		"removed-module.tf":          "# This module was removed",
+		"terraform.tfstate":          "# Terraform state - should be preserved",
+		"workspace.tfvars":           "# Workspace vars - should be preserved",
 		".provisioner-metadata.json": "# Metadata - should be preserved",
 	}
 
@@ -161,7 +161,7 @@ func TestCopyDirectoryFilesWithCleanup(t *testing.T) {
 	// Verify preserved files still exist with original content
 	preservedFiles := []string{
 		"terraform.tfstate",
-		"environment.tfvars",
+		"workspace.tfvars",
 		".provisioner-metadata.json",
 	}
 
@@ -202,7 +202,7 @@ func TestShouldPreserveFile(t *testing.T) {
 		{"terraform.tfstate", true},
 		{"terraform.tfstate.backup", true},
 		{".terraform.lock.hcl", true},
-		{"environment.tfvars", true},
+		{"workspace.tfvars", true},
 		{"dev.tfvars", true},
 		{"staging.tfvars.json", true},
 		{"terraform.tfvars", true},

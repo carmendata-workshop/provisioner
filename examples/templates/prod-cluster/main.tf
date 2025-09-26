@@ -14,11 +14,11 @@ terraform {
 
 resource "local_file" "template_marker" {
   content  = "Template: prod-cluster\nDeployed at: $${timestamp()}\n"
-  filename = "/tmp/$${var.environment_name}_prod-cluster_deployed.txt"
+  filename = "/tmp/$${var.workspace_name}_prod-cluster_deployed.txt"
 }
 
-variable "environment_name" {
-  description = "Name of the environment"
+variable "workspace_name" {
+  description = "Name of the workspace"
   type        = string
   default     = "template"
 }

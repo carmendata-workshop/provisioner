@@ -9,12 +9,12 @@ import (
 func TestNewState(t *testing.T) {
 	state := NewState()
 
-	if state.Environments == nil {
-		t.Error("expected Environments map to be initialized")
+	if state.Workspaces == nil {
+		t.Error("expected Workspaces map to be initialized")
 	}
 
-	if len(state.Environments) != 0 {
-		t.Errorf("expected empty Environments map, got %d entries", len(state.Environments))
+	if len(state.Workspaces) != 0 {
+		t.Errorf("expected empty Workspaces map, got %d entries", len(state.Workspaces))
 	}
 
 	if state.LastUpdated.IsZero() {
@@ -33,8 +33,8 @@ func TestLoadStateMissingFile(t *testing.T) {
 		t.Fatal("expected state to be created")
 	}
 
-	if len(state.Environments) != 0 {
-		t.Errorf("expected empty state, got %d environments", len(state.Environments))
+	if len(state.Workspaces) != 0 {
+		t.Errorf("expected empty state, got %d workspaces", len(state.Workspaces))
 	}
 }
 
@@ -49,7 +49,7 @@ func TestSaveAndLoadState(t *testing.T) {
 
 	// Create state with test data
 	state := NewState()
-	state.SetEnvironmentStatus("test-env", StatusDeployed)
+	state.SetWorkspaceStatus("test-workspace", StatusDeployed)
 
 	// Save state
 	if err := state.SaveState(tempFile.Name()); err != nil {
@@ -63,101 +63,101 @@ func TestSaveAndLoadState(t *testing.T) {
 	}
 
 	// Verify loaded state
-	if len(loadedState.Environments) != 1 {
-		t.Errorf("expected 1 environment, got %d", len(loadedState.Environments))
+	if len(loadedState.Workspaces) != 1 {
+		t.Errorf("expected 1 workspace, got %d", len(loadedState.Workspaces))
 	}
 
-	env := loadedState.GetEnvironmentState("test-env")
-	if env.Status != StatusDeployed {
-		t.Errorf("expected status %s, got %s", StatusDeployed, env.Status)
+	workspace := loadedState.GetWorkspaceState("test-workspace")
+	if workspace.Status != StatusDeployed {
+		t.Errorf("expected status %s, got %s", StatusDeployed, workspace.Status)
 	}
 }
 
-func TestGetEnvironmentState(t *testing.T) {
+func TestGetWorkspaceState(t *testing.T) {
 	state := NewState()
 
-	// Get non-existent environment (should create new)
-	env := state.GetEnvironmentState("new-env")
-	if env == nil {
-		t.Fatal("expected environment state to be created")
+	// Get non-existent workspace (should create new)
+	workspace := state.GetWorkspaceState("new-workspace")
+	if workspace == nil {
+		t.Fatal("expected workspace state to be created")
 	}
 
-	if env.Name != "new-env" {
-		t.Errorf("expected name 'new-env', got '%s'", env.Name)
+	if workspace.Name != "new-workspace" {
+		t.Errorf("expected name 'new-workspace', got '%s'", workspace.Name)
 	}
 
-	if env.Status != StatusDestroyed {
-		t.Errorf("expected initial status %s, got %s", StatusDestroyed, env.Status)
+	if workspace.Status != StatusDestroyed {
+		t.Errorf("expected initial status %s, got %s", StatusDestroyed, workspace.Status)
 	}
 
-	// Get existing environment
-	env2 := state.GetEnvironmentState("new-env")
-	if env != env2 {
-		t.Error("expected same environment instance")
+	// Get existing workspace
+	workspace2 := state.GetWorkspaceState("new-workspace")
+	if workspace != workspace2 {
+		t.Error("expected same workspace instance")
 	}
 }
 
-func TestSetEnvironmentStatus(t *testing.T) {
+func TestSetWorkspaceStatus(t *testing.T) {
 	state := NewState()
 
 	// Test deployed status
-	state.SetEnvironmentStatus("test-env", StatusDeployed)
-	env := state.GetEnvironmentState("test-env")
+	state.SetWorkspaceStatus("test-workspace", StatusDeployed)
+	workspace := state.GetWorkspaceState("test-workspace")
 
-	if env.Status != StatusDeployed {
-		t.Errorf("expected status %s, got %s", StatusDeployed, env.Status)
+	if workspace.Status != StatusDeployed {
+		t.Errorf("expected status %s, got %s", StatusDeployed, workspace.Status)
 	}
 
-	if env.LastDeployed == nil {
+	if workspace.LastDeployed == nil {
 		t.Error("expected LastDeployed to be set")
 	}
 
-	if env.LastDeployError != "" {
-		t.Errorf("expected LastDeployError to be cleared, got '%s'", env.LastDeployError)
+	if workspace.LastDeployError != "" {
+		t.Errorf("expected LastDeployError to be cleared, got '%s'", workspace.LastDeployError)
 	}
 
 	// Test destroyed status
-	state.SetEnvironmentStatus("test-env", StatusDestroyed)
-	env = state.GetEnvironmentState("test-env")
+	state.SetWorkspaceStatus("test-workspace", StatusDestroyed)
+	workspace = state.GetWorkspaceState("test-workspace")
 
-	if env.Status != StatusDestroyed {
-		t.Errorf("expected status %s, got %s", StatusDestroyed, env.Status)
+	if workspace.Status != StatusDestroyed {
+		t.Errorf("expected status %s, got %s", StatusDestroyed, workspace.Status)
 	}
 
-	if env.LastDestroyed == nil {
+	if workspace.LastDestroyed == nil {
 		t.Error("expected LastDestroyed to be set")
 	}
 
-	if env.LastDestroyError != "" {
-		t.Errorf("expected LastDestroyError to be cleared, got '%s'", env.LastDestroyError)
+	if workspace.LastDestroyError != "" {
+		t.Errorf("expected LastDestroyError to be cleared, got '%s'", workspace.LastDestroyError)
 	}
 }
 
-func TestSetEnvironmentError(t *testing.T) {
+func TestSetWorkspaceError(t *testing.T) {
 	state := NewState()
 
 	// Test deploy error
-	state.SetEnvironmentError("test-env", true, "deploy failed")
-	env := state.GetEnvironmentState("test-env")
+	state.SetWorkspaceError("test-workspace", true, "deploy failed")
+	workspace := state.GetWorkspaceState("test-workspace")
 
-	if env.LastDeployError != "deploy failed" {
-		t.Errorf("expected deploy error 'deploy failed', got '%s'", env.LastDeployError)
+	if workspace.LastDeployError != "deploy failed" {
+		t.Errorf("expected deploy error 'deploy failed', got '%s'", workspace.LastDeployError)
 	}
 
-	if env.Status != StatusDeployFailed {
-		t.Errorf("expected status %s after deploy error, got %s", StatusDeployFailed, env.Status)
+	if workspace.Status != StatusDeployFailed {
+		t.Errorf("expected status %s after deploy error, got %s", StatusDeployFailed, workspace.Status)
 	}
 
 	// Test destroy error
-	state.SetEnvironmentError("test-env", false, "destroy failed")
-	env = state.GetEnvironmentState("test-env")
+	state.SetWorkspaceError("test-workspace", false, "destroy failed")
+	workspace = state.GetWorkspaceState("test-workspace")
 
-	if env.LastDestroyError != "destroy failed" {
-		t.Errorf("expected destroy error 'destroy failed', got '%s'", env.LastDestroyError)
+	if workspace.LastDestroyError != "destroy failed" {
+		t.Errorf("expected destroy error 'destroy failed', got '%s'", workspace.LastDestroyError)
 	}
 
-	if env.Status != StatusDestroyFailed {
-		t.Errorf("expected status %s after destroy error, got %s", StatusDestroyFailed, env.Status)
+	if workspace.Status != StatusDestroyFailed {
+		t.Errorf("expected status %s after destroy error, got %s", StatusDestroyFailed, workspace.Status)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestSaveStateCreatesDirectory(t *testing.T) {
 	statePath := filepath.Join(tempDir, "subdir", "state.json")
 
 	state := NewState()
-	state.SetEnvironmentStatus("test", StatusDeployed)
+	state.SetWorkspaceStatus("test", StatusDeployed)
 
 	// Save should create directory
 	if err := state.SaveState(statePath); err != nil {

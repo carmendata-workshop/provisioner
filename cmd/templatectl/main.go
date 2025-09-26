@@ -12,7 +12,7 @@ import (
 func printUsage() {
 	fmt.Printf(`Usage: %s COMMAND [ARGUMENTS...]
 
-Template management CLI for OpenTofu Environment Scheduler.
+Template management CLI for OpenTofu Workspace Scheduler.
 
 Commands:
   add NAME URL [OPTIONS]   Add new template from URL
@@ -42,8 +42,8 @@ Examples:
   %s validate --all                              # Validate all templates
 
 Related Tools:
-  provisioner      Environment scheduler daemon
-  environmentctl   Environment management CLI
+  provisioner      Workspace scheduler daemon
+  workspacectl   Workspace management CLI
 `, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 }
 

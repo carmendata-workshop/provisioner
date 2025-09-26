@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "template": "dev-server",
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "Example workspace using dev-server template reference (disabled by default)"
+}

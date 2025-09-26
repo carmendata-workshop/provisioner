@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"provisioner/pkg/environment"
 	"provisioner/pkg/opentofu"
+	"provisioner/pkg/workspace"
 )
 
-func TestSchedulerDeployEnvironment(t *testing.T) {
+func TestSchedulerDeployWorkspace(t *testing.T) {
 	// Create temporary directories
 	tempDir, err := os.MkdirTemp("", "scheduler-test-*")
 	if err != nil {
@@ -21,21 +21,21 @@ func TestSchedulerDeployEnvironment(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stateDir := filepath.Join(tempDir, "state")
-	envPath := filepath.Join(tempDir, "test-env")
+	workspacePath := filepath.Join(tempDir, "test-workspace")
 
-	// Create test environment
-	if err := os.MkdirAll(envPath, 0755); err != nil {
-		t.Fatalf("failed to create env directory: %v", err)
+	// Create test workspace
+	if err := os.MkdirAll(workspacePath, 0755); err != nil {
+		t.Fatalf("failed to create workspace directory: %v", err)
 	}
 
-	env := environment.Environment{
-		Name: "test-env",
-		Config: environment.Config{
+	workspace := workspace.Workspace{
+		Name: "test-workspace",
+		Config: workspace.Config{
 			Enabled:         true,
 			DeploySchedule:  "* * * * *",
 			DestroySchedule: "* * * * *",
 		},
-		Path: envPath,
+		Path: workspacePath,
 	}
 
 	// Create mock client
@@ -47,34 +47,34 @@ func TestSchedulerDeployEnvironment(t *testing.T) {
 	scheduler.state = NewState()
 
 	// Test successful deployment
-	scheduler.deployEnvironment(env)
+	scheduler.deployWorkspace(workspace)
 
 	// Verify mock was called
 	if mockClient.DeployCallCount != 1 {
 		t.Errorf("expected 1 deploy call, got %d", mockClient.DeployCallCount)
 	}
 
-	deployEnv := mockClient.GetLastDeployEnv()
-	if deployEnv == nil || deployEnv.Path != envPath {
-		t.Errorf("expected deploy env path '%s', got %v", envPath, deployEnv)
+	deployWorkspace := mockClient.GetLastDeployWorkspace()
+	if deployWorkspace == nil || deployWorkspace.Path != workspacePath {
+		t.Errorf("expected deploy workspace path '%s', got %v", workspacePath, deployWorkspace)
 	}
 
 	// Verify state was updated
-	envState := scheduler.state.GetEnvironmentState("test-env")
-	if envState.Status != StatusDeployed {
-		t.Errorf("expected status %s, got %s", StatusDeployed, envState.Status)
+	workspaceState := scheduler.state.GetWorkspaceState("test-workspace")
+	if workspaceState.Status != StatusDeployed {
+		t.Errorf("expected status %s, got %s", StatusDeployed, workspaceState.Status)
 	}
 
-	if envState.LastDeployed == nil {
+	if workspaceState.LastDeployed == nil {
 		t.Error("expected LastDeployed to be set")
 	}
 
-	if envState.LastDeployError != "" {
-		t.Errorf("expected no deploy error, got '%s'", envState.LastDeployError)
+	if workspaceState.LastDeployError != "" {
+		t.Errorf("expected no deploy error, got '%s'", workspaceState.LastDeployError)
 	}
 }
 
-func TestSchedulerDeployEnvironmentError(t *testing.T) {
+func TestSchedulerDeployWorkspaceError(t *testing.T) {
 	// Create temporary directories
 	tempDir, err := os.MkdirTemp("", "scheduler-test-*")
 	if err != nil {
@@ -83,12 +83,12 @@ func TestSchedulerDeployEnvironmentError(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stateDir := filepath.Join(tempDir, "state")
-	envPath := filepath.Join(tempDir, "test-env")
+	workspacePath := filepath.Join(tempDir, "test-workspace")
 
-	env := environment.Environment{
-		Name:   "test-env",
-		Config: environment.Config{},
-		Path:   envPath,
+	workspace := workspace.Workspace{
+		Name:   "test-workspace",
+		Config: workspace.Config{},
+		Path:   workspacePath,
 	}
 
 	// Create mock client with error
@@ -102,20 +102,20 @@ func TestSchedulerDeployEnvironmentError(t *testing.T) {
 	scheduler.state = NewState()
 
 	// Test failed deployment
-	scheduler.deployEnvironment(env)
+	scheduler.deployWorkspace(workspace)
 
 	// Verify state shows error
-	envState := scheduler.state.GetEnvironmentState("test-env")
-	if envState.Status != StatusDeployFailed {
-		t.Errorf("expected status %s after error, got %s", StatusDeployFailed, envState.Status)
+	workspaceState := scheduler.state.GetWorkspaceState("test-workspace")
+	if workspaceState.Status != StatusDeployFailed {
+		t.Errorf("expected status %s after error, got %s", StatusDeployFailed, workspaceState.Status)
 	}
 
-	if envState.LastDeployError != "deploy failed" {
-		t.Errorf("expected deploy error 'deploy failed', got '%s'", envState.LastDeployError)
+	if workspaceState.LastDeployError != "deploy failed" {
+		t.Errorf("expected deploy error 'deploy failed', got '%s'", workspaceState.LastDeployError)
 	}
 }
 
-func TestSchedulerDestroyEnvironment(t *testing.T) {
+func TestSchedulerDestroyWorkspace(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "scheduler-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
@@ -123,12 +123,12 @@ func TestSchedulerDestroyEnvironment(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	stateDir := filepath.Join(tempDir, "state")
-	envPath := filepath.Join(tempDir, "test-env")
+	workspacePath := filepath.Join(tempDir, "test-workspace")
 
-	env := environment.Environment{
-		Name:   "test-env",
-		Config: environment.Config{},
-		Path:   envPath,
+	workspace := workspace.Workspace{
+		Name:   "test-workspace",
+		Config: workspace.Config{},
+		Path:   workspacePath,
 	}
 
 	// Create mock client
@@ -140,34 +140,34 @@ func TestSchedulerDestroyEnvironment(t *testing.T) {
 	scheduler.state = NewState()
 
 	// Set initial state as deployed
-	scheduler.state.SetEnvironmentStatus("test-env", StatusDeployed)
+	scheduler.state.SetWorkspaceStatus("test-workspace", StatusDeployed)
 
 	// Test destruction
-	scheduler.destroyEnvironment(env)
+	scheduler.destroyWorkspace(workspace)
 
 	// Verify mock was called
 	if mockClient.DestroyCallCount != 1 {
 		t.Errorf("expected 1 destroy call, got %d", mockClient.DestroyCallCount)
 	}
 
-	destroyEnv := mockClient.GetLastDestroyEnv()
-	if destroyEnv == nil || destroyEnv.Path != envPath {
-		t.Errorf("expected destroy env path '%s', got %v", envPath, destroyEnv)
+	destroyWorkspace := mockClient.GetLastDestroyWorkspace()
+	if destroyWorkspace == nil || destroyWorkspace.Path != workspacePath {
+		t.Errorf("expected destroy workspace path '%s', got %v", workspacePath, destroyWorkspace)
 	}
 
 	// Verify state was updated
-	envState := scheduler.state.GetEnvironmentState("test-env")
-	if envState.Status != StatusDestroyed {
-		t.Errorf("expected status %s, got %s", StatusDestroyed, envState.Status)
+	workspaceState := scheduler.state.GetWorkspaceState("test-workspace")
+	if workspaceState.Status != StatusDestroyed {
+		t.Errorf("expected status %s, got %s", StatusDestroyed, workspaceState.Status)
 	}
 
-	if envState.LastDestroyed == nil {
+	if workspaceState.LastDestroyed == nil {
 		t.Error("expected LastDestroyed to be set")
 	}
 }
 
-func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
-	// Create temporary environment directory for testing
+func TestSchedulerCheckWorkspaceSchedules(t *testing.T) {
+	// Create temporary workspace directory for testing
 	tempDir, err := os.MkdirTemp("", "scheduler-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
@@ -181,23 +181,23 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 	scheduler := NewWithClient(mockClient)
 	scheduler.state = NewState()
 
-	// Create test environment with schedules that should trigger
+	// Create test workspace with schedules that should trigger
 	// Using specific time schedule instead of "* * * * *" to work with window-based logic
-	env := environment.Environment{
-		Name: "test-env",
-		Config: environment.Config{
+	workspace := workspace.Workspace{
+		Name: "test-workspace",
+		Config: workspace.Config{
 			Enabled:         true,
 			DeploySchedule:  "30 14 * * *", // 2:30 PM daily
 			DestroySchedule: "30 14 * * *", // 2:30 PM daily
 		},
-		Path: filepath.Join(tempDir, "test-env"),
+		Path: filepath.Join(tempDir, "test-workspace"),
 	}
 
 	// Test time after the scheduled time (window-based logic)
 	testTime := time.Date(2024, 6, 15, 14, 35, 0, 0, time.UTC) // 5 minutes after scheduled time
 
-	// Environment starts as destroyed, so deploy should trigger
-	scheduler.checkEnvironmentSchedules(env, testTime)
+	// Workspace starts as destroyed, so deploy should trigger
+	scheduler.checkWorkspaceSchedules(workspace, testTime)
 
 	// Wait a brief moment for goroutine to complete
 	time.Sleep(10 * time.Millisecond)
@@ -207,12 +207,12 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 		t.Errorf("expected 1 deploy call, got %d", mockClient.DeployCallCount)
 	}
 
-	// Reset mock and set environment as deployed
+	// Reset mock and set workspace as deployed
 	mockClient.Reset()
-	scheduler.state.SetEnvironmentStatus("test-env", StatusDeployed)
+	scheduler.state.SetWorkspaceStatus("test-workspace", StatusDeployed)
 
-	// Now destroy should trigger (since environment is deployed and destroy time has passed)
-	scheduler.checkEnvironmentSchedules(env, testTime)
+	// Now destroy should trigger (since workspace is deployed and destroy time has passed)
+	scheduler.checkWorkspaceSchedules(workspace, testTime)
 
 	// Wait a brief moment for goroutine to complete
 	time.Sleep(10 * time.Millisecond)
@@ -223,7 +223,7 @@ func TestSchedulerCheckEnvironmentSchedules(t *testing.T) {
 	}
 }
 
-func TestSchedulerSkipsBusyEnvironments(t *testing.T) {
+func TestSchedulerSkipsBusyWorkspaces(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "scheduler-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
@@ -234,59 +234,59 @@ func TestSchedulerSkipsBusyEnvironments(t *testing.T) {
 	scheduler := NewWithClient(mockClient)
 	scheduler.state = NewState()
 
-	env := environment.Environment{
-		Name: "test-env",
-		Config: environment.Config{
+	workspace := workspace.Workspace{
+		Name: "test-workspace",
+		Config: workspace.Config{
 			DeploySchedule:  "* * * * *",
 			DestroySchedule: "* * * * *",
 		},
-		Path: filepath.Join(tempDir, "test-env"),
+		Path: filepath.Join(tempDir, "test-workspace"),
 	}
 
 	testTime := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
-	// Set environment as currently deploying
-	scheduler.state.SetEnvironmentStatus("test-env", StatusDeploying)
+	// Set workspace as currently deploying
+	scheduler.state.SetWorkspaceStatus("test-workspace", StatusDeploying)
 
-	// Check schedules - should skip busy environment
-	scheduler.checkEnvironmentSchedules(env, testTime)
+	// Check schedules - should skip busy workspace
+	scheduler.checkWorkspaceSchedules(workspace, testTime)
 
 	// Wait briefly
 	time.Sleep(10 * time.Millisecond)
 
 	// Verify no operations were called
 	if mockClient.DeployCallCount != 0 {
-		t.Errorf("expected 0 deploy calls for busy environment, got %d", mockClient.DeployCallCount)
+		t.Errorf("expected 0 deploy calls for busy workspace, got %d", mockClient.DeployCallCount)
 	}
 
 	if mockClient.DestroyCallCount != 0 {
-		t.Errorf("expected 0 destroy calls for busy environment, got %d", mockClient.DestroyCallCount)
+		t.Errorf("expected 0 destroy calls for busy workspace, got %d", mockClient.DestroyCallCount)
 	}
 }
 
-func TestSchedulerLoadEnvironments(t *testing.T) {
-	// Create temporary environments directory
-	tempDir, err := os.MkdirTemp("", "scheduler-env-test-*")
+func TestSchedulerLoadWorkspaces(t *testing.T) {
+	// Create temporary workspaces directory
+	tempDir, err := os.MkdirTemp("", "scheduler-workspace-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	// Create test environment
-	envDir := filepath.Join(tempDir, "test-env")
-	if err := os.MkdirAll(envDir, 0755); err != nil {
-		t.Fatalf("failed to create env directory: %v", err)
+	// Create test workspace
+	workspaceDir := filepath.Join(tempDir, "test-workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("failed to create workspace directory: %v", err)
 	}
 
-	config := environment.Config{
+	config := workspace.Config{
 		Enabled:         true,
 		DeploySchedule:  "0 9 * * *",
 		DestroySchedule: "0 17 * * *",
-		Description:     "Test environment",
+		Description:     "Test workspace",
 	}
 
 	configData, _ := json.Marshal(config)
-	configPath := filepath.Join(envDir, "config.json")
+	configPath := filepath.Join(workspaceDir, "config.json")
 	if err := os.WriteFile(configPath, configData, 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestSchedulerLoadEnvironments(t *testing.T) {
 	// Create scheduler
 	scheduler := New()
 
-	// Override LoadEnvironments to use our test directory
+	// Override LoadWorkspaces to use our test directory
 	// We'll need to modify the method or create a test version
 
 	// For now, test that a scheduler can be created
@@ -383,22 +383,22 @@ func TestSchedulerMultipleDeploySchedules(t *testing.T) {
 	// Initialize state properly
 	scheduler.state = NewState()
 
-	// Add test environment with multiple deploy schedules
-	testEnv := environment.Environment{
-		Name: "test-env",
-		Config: environment.Config{
+	// Add test workspace with multiple deploy schedules
+	testWorkspace := workspace.Workspace{
+		Name: "test-workspace",
+		Config: workspace.Config{
 			Enabled:         true,
 			DeploySchedule:  []string{"0 9 * * 1", "0 14 * * 1"}, // Monday 9am and 2pm
 			DestroySchedule: "0 17 * * 1",                        // Monday 5pm
-			Description:     "Test environment with multiple deploy schedules",
+			Description:     "Test workspace with multiple deploy schedules",
 		},
 		Path: tempDir,
 	}
-	scheduler.environments = []environment.Environment{testEnv}
+	scheduler.workspaces = []workspace.Workspace{testWorkspace}
 
 	// Test Monday 9:05 AM - should trigger deploy (after 9:00 AM schedule)
 	mondayAM := time.Date(2024, 6, 17, 9, 5, 0, 0, time.UTC)
-	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayAM)
+	scheduler.checkWorkspaceSchedules(scheduler.workspaces[0], mondayAM)
 
 	// Wait for goroutine to complete
 	time.Sleep(10 * time.Millisecond)
@@ -413,12 +413,12 @@ func TestSchedulerMultipleDeploySchedules(t *testing.T) {
 
 	// Test Monday 2:05 PM - should trigger deploy again (after 2:00 PM schedule)
 	mondayPM := time.Date(2024, 6, 17, 14, 5, 0, 0, time.UTC)
-	// Reset environment state to allow deployment AND clear the last deployed time
+	// Reset workspace state to allow deployment AND clear the last deployed time
 	// so the new schedule window can trigger
-	scheduler.state.SetEnvironmentStatus("test-env", StatusDestroyed)
-	envState := scheduler.state.GetEnvironmentState("test-env")
-	envState.LastDeployed = nil // Clear last deployed time to allow new schedule
-	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayPM)
+	scheduler.state.SetWorkspaceStatus("test-workspace", StatusDestroyed)
+	workspaceState := scheduler.state.GetWorkspaceState("test-workspace")
+	workspaceState.LastDeployed = nil // Clear last deployed time to allow new schedule
+	scheduler.checkWorkspaceSchedules(scheduler.workspaces[0], mondayPM)
 
 	// Wait for goroutine to complete
 	time.Sleep(10 * time.Millisecond)
@@ -431,8 +431,8 @@ func TestSchedulerMultipleDeploySchedules(t *testing.T) {
 	// Test Monday 10:00 AM - should NOT trigger deploy (no schedule)
 	mockClient.Reset()
 	mondayMid := time.Date(2024, 6, 17, 10, 0, 0, 0, time.UTC)
-	scheduler.state.SetEnvironmentStatus("test-env", StatusDestroyed)
-	scheduler.checkEnvironmentSchedules(scheduler.environments[0], mondayMid)
+	scheduler.state.SetWorkspaceStatus("test-workspace", StatusDestroyed)
+	scheduler.checkWorkspaceSchedules(scheduler.workspaces[0], mondayMid)
 
 	// Wait for potential goroutine (shouldn't happen)
 	time.Sleep(10 * time.Millisecond)

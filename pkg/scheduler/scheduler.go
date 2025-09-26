@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"provisioner/pkg/environment"
 	"provisioner/pkg/logging"
 	"provisioner/pkg/opentofu"
+	"provisioner/pkg/workspace"
 )
 
 type Scheduler struct {
-	environments    []environment.Environment
+	workspaces      []workspace.Workspace
 	state           *State
 	client          opentofu.TofuClient
 	statePath       string
@@ -60,38 +60,38 @@ func NewQuiet() *Scheduler {
 	}
 }
 
-func (s *Scheduler) LoadEnvironments() error {
-	environmentsDir := filepath.Join(s.configDir, "environments")
+func (s *Scheduler) LoadWorkspaces() error {
+	workspacesDir := filepath.Join(s.configDir, "workspaces")
 
-	environments, err := environment.LoadEnvironments(environmentsDir)
+	workspaces, err := workspace.LoadWorkspaces(workspacesDir)
 	if err != nil {
-		return fmt.Errorf("failed to load environments: %w", err)
+		return fmt.Errorf("failed to load workspaces: %w", err)
 	}
 
-	s.environments = environments
+	s.workspaces = workspaces
 	s.lastConfigCheck = time.Now()
 
 	enabledCount := 0
-	for _, env := range s.environments {
-		if env.Config.Enabled {
+	for _, workspace := range s.workspaces {
+		if workspace.Config.Enabled {
 			enabledCount++
 		}
 	}
 
 	if !s.quietMode {
-		logging.LogSystemd("Loaded %d environments (%d enabled, %d disabled)", len(s.environments), enabledCount, len(s.environments)-enabledCount)
+		logging.LogSystemd("Loaded %d workspaces (%d enabled, %d disabled)", len(s.workspaces), enabledCount, len(s.workspaces)-enabledCount)
 
-		for _, env := range s.environments {
+		for _, workspace := range s.workspaces {
 			status := "disabled"
-			if env.Config.Enabled {
+			if workspace.Config.Enabled {
 				status = "enabled"
 			}
 
-			deploySchedules, _ := env.Config.GetDeploySchedules()
-			destroySchedules, _ := env.Config.GetDestroySchedules()
+			deploySchedules, _ := workspace.Config.GetDeploySchedules()
+			destroySchedules, _ := workspace.Config.GetDestroySchedules()
 
-			logging.LogSystemd("Environment: %s (%s) - deploy: %s, destroy: %s",
-				env.Name,
+			logging.LogSystemd("Workspace: %s (%s) - deploy: %s, destroy: %s",
+				workspace.Name,
 				status,
 				formatSchedules(deploySchedules),
 				formatSchedules(destroySchedules))
@@ -109,7 +109,7 @@ func (s *Scheduler) LoadState() error {
 
 	s.state = state
 	if !s.quietMode {
-		logging.LogSystemd("State loaded with %d environment records", len(s.state.Environments))
+		logging.LogSystemd("State loaded with %d workspace records", len(s.state.Workspaces))
 	}
 	return nil
 }
@@ -159,19 +159,19 @@ func (s *Scheduler) checkSchedules() {
 	// Check for configuration changes every 30 seconds
 	if now.Sub(s.lastConfigCheck) > 30*time.Second {
 		if s.hasConfigChanged() {
-			logging.LogSystemd("Configuration changes detected, reloading environments...")
-			if err := s.LoadEnvironments(); err != nil {
-				logging.LogSystemd("Error reloading environments: %v", err)
+			logging.LogSystemd("Configuration changes detected, reloading workspaces...")
+			if err := s.LoadWorkspaces(); err != nil {
+				logging.LogSystemd("Error reloading workspaces: %v", err)
 			}
 		} else {
 			s.lastConfigCheck = now
 		}
 	}
 
-	for _, env := range s.environments {
-		// Only check schedules for enabled environments
-		if env.Config.Enabled {
-			s.checkEnvironmentSchedules(env, now)
+	for _, workspace := range s.workspaces {
+		// Only check schedules for enabled workspaces
+		if workspace.Config.Enabled {
+			s.checkWorkspaceSchedules(workspace, now)
 		}
 	}
 
@@ -181,46 +181,46 @@ func (s *Scheduler) checkSchedules() {
 	}
 }
 
-func (s *Scheduler) checkEnvironmentSchedules(env environment.Environment, now time.Time) {
-	envState := s.state.GetEnvironmentState(env.Name)
+func (s *Scheduler) checkWorkspaceSchedules(workspace workspace.Workspace, now time.Time) {
+	workspaceState := s.state.GetWorkspaceState(workspace.Name)
 
-	// Skip if environment is currently being deployed or destroyed
-	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
-		logging.LogEnvironment(env.Name, "Environment is busy (%s), skipping", envState.Status)
+	// Skip if workspace is currently being deployed or destroyed
+	if workspaceState.Status == StatusDeploying || workspaceState.Status == StatusDestroying {
+		logging.LogWorkspace(workspace.Name, "Workspace is busy (%s), skipping", workspaceState.Status)
 		return
 	}
 
 	// Check deploy schedules
-	deploySchedules, err := env.Config.GetDeploySchedules()
+	deploySchedules, err := workspace.Config.GetDeploySchedules()
 	if err != nil {
-		logging.LogEnvironment(env.Name, "Invalid deploy schedule: %v", err)
-	} else if s.ShouldRunDeploySchedule(deploySchedules, now, envState) {
-		logging.LogEnvironment(env.Name, "Triggering deployment")
-		go s.deployEnvironment(env)
+		logging.LogWorkspace(workspace.Name, "Invalid deploy schedule: %v", err)
+	} else if s.ShouldRunDeploySchedule(deploySchedules, now, workspaceState) {
+		logging.LogWorkspace(workspace.Name, "Triggering deployment")
+		go s.deployWorkspace(workspace)
 	}
 
 	// Check destroy schedules
-	destroySchedules, err := env.Config.GetDestroySchedules()
+	destroySchedules, err := workspace.Config.GetDestroySchedules()
 	if err != nil {
-		logging.LogEnvironment(env.Name, "Invalid destroy schedule: %v", err)
+		logging.LogWorkspace(workspace.Name, "Invalid destroy schedule: %v", err)
 	} else if len(destroySchedules) == 0 {
 		// Permanent deployment - no destroy schedules (destroy_schedule: false)
 		// Log only in verbose mode to avoid spam
-	} else if s.ShouldRunDestroySchedule(destroySchedules, now, envState) {
-		logging.LogEnvironment(env.Name, "Triggering destruction")
-		go s.destroyEnvironment(env)
+	} else if s.ShouldRunDestroySchedule(destroySchedules, now, workspaceState) {
+		logging.LogWorkspace(workspace.Name, "Triggering destruction")
+		go s.destroyWorkspace(workspace)
 	}
 }
 
-// ShouldRunDeploySchedule checks if environment should be deployed based on schedule and current state
-func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, envState *EnvironmentState) bool {
+// ShouldRunDeploySchedule checks if workspace should be deployed based on schedule and current state
+func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, workspaceState *WorkspaceState) bool {
 	// Don't deploy if already deployed
-	if envState.Status == StatusDeployed {
+	if workspaceState.Status == StatusDeployed {
 		return false
 	}
 
 	// Don't retry deployment if in failed state (wait for config change)
-	if envState.Status == StatusDeployFailed {
+	if workspaceState.Status == StatusDeployFailed {
 		return false
 	}
 
@@ -242,8 +242,8 @@ func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, e
 		// 1. The scheduled time has passed
 		// 2. We haven't deployed since that scheduled time
 		if now.After(*lastScheduledTime) {
-			if envState.LastDeployed == nil || envState.LastDeployed.Before(*lastScheduledTime) {
-				// Note: We don't log here since this will be logged in checkEnvironmentSchedules
+			if workspaceState.LastDeployed == nil || workspaceState.LastDeployed.Before(*lastScheduledTime) {
+				// Note: We don't log here since this will be logged in checkWorkspaceSchedules
 				return true
 			}
 		}
@@ -251,15 +251,15 @@ func (s *Scheduler) ShouldRunDeploySchedule(schedules []string, now time.Time, e
 	return false
 }
 
-// ShouldRunDestroySchedule checks if environment should be destroyed based on schedule and current state
-func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, envState *EnvironmentState) bool {
+// ShouldRunDestroySchedule checks if workspace should be destroyed based on schedule and current state
+func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, workspaceState *WorkspaceState) bool {
 	// Don't destroy if already destroyed
-	if envState.Status == StatusDestroyed {
+	if workspaceState.Status == StatusDestroyed {
 		return false
 	}
 
 	// Don't retry destruction if in failed state (wait for config change)
-	if envState.Status == StatusDestroyFailed {
+	if workspaceState.Status == StatusDestroyFailed {
 		return false
 	}
 
@@ -281,8 +281,8 @@ func (s *Scheduler) ShouldRunDestroySchedule(schedules []string, now time.Time, 
 		// 1. The scheduled time has passed
 		// 2. We haven't destroyed since that scheduled time
 		if now.After(*lastScheduledTime) {
-			if envState.LastDestroyed == nil || envState.LastDestroyed.Before(*lastScheduledTime) {
-				// Note: We don't log here since this will be logged in checkEnvironmentSchedules
+			if workspaceState.LastDestroyed == nil || workspaceState.LastDestroyed.Before(*lastScheduledTime) {
+				// Note: We don't log here since this will be logged in checkWorkspaceSchedules
 				return true
 			}
 		}
@@ -324,57 +324,57 @@ func (s *Scheduler) shouldRunAnySchedule(schedules []string, now time.Time) bool
 	return false
 }
 
-func (s *Scheduler) deployEnvironment(env environment.Environment) {
-	envName := env.Name
-	logging.LogEnvironmentOperation(envName, "DEPLOY", "Starting deployment")
+func (s *Scheduler) deployWorkspace(workspace workspace.Workspace) {
+	workspaceName := workspace.Name
+	logging.LogWorkspaceOperation(workspaceName, "DEPLOY", "Starting deployment")
 
-	s.state.SetEnvironmentStatus(envName, StatusDeploying)
+	s.state.SetWorkspaceStatus(workspaceName, StatusDeploying)
 	_ = s.SaveState()
 
-	if err := s.client.Deploy(&env); err != nil {
+	if err := s.client.Deploy(&workspace); err != nil {
 		// Log high-level failure to systemd
-		logging.LogEnvironmentOperation(envName, "DEPLOY", "Failed: %s", getHighLevelError(err))
+		logging.LogWorkspaceOperation(workspaceName, "DEPLOY", "Failed: %s", getHighLevelError(err))
 
-		// Log detailed error only to environment file (strip ANSI colors)
+		// Log detailed error only to workspace file (strip ANSI colors)
 		cleanError := stripANSIColors(err.Error())
-		logging.LogEnvironmentOnly(envName, "DEPLOY: Failed: %s", cleanError)
+		logging.LogWorkspaceOnly(workspaceName, "DEPLOY: Failed: %s", cleanError)
 
 		// Add log file location reference to systemd logs for easier debugging
-		logFile := s.getEnvironmentLogFile(envName)
+		logFile := s.getWorkspaceLogFile(workspaceName)
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
-		s.state.SetEnvironmentError(envName, true, err.Error())
+		s.state.SetWorkspaceError(workspaceName, true, err.Error())
 	} else {
-		logging.LogEnvironmentOperation(envName, "DEPLOY", "Successfully completed")
-		s.state.SetEnvironmentStatus(envName, StatusDeployed)
+		logging.LogWorkspaceOperation(workspaceName, "DEPLOY", "Successfully completed")
+		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
 	}
 
 	_ = s.SaveState()
 }
 
-func (s *Scheduler) destroyEnvironment(env environment.Environment) {
-	envName := env.Name
-	logging.LogEnvironmentOperation(envName, "DESTROY", "Starting destruction")
+func (s *Scheduler) destroyWorkspace(workspace workspace.Workspace) {
+	workspaceName := workspace.Name
+	logging.LogWorkspaceOperation(workspaceName, "DESTROY", "Starting destruction")
 
-	s.state.SetEnvironmentStatus(envName, StatusDestroying)
+	s.state.SetWorkspaceStatus(workspaceName, StatusDestroying)
 	_ = s.SaveState()
 
-	if err := s.client.DestroyEnvironment(&env); err != nil {
+	if err := s.client.DestroyWorkspace(&workspace); err != nil {
 		// Log high-level failure to systemd
-		logging.LogEnvironmentOperation(envName, "DESTROY", "Failed: %s", getHighLevelError(err))
+		logging.LogWorkspaceOperation(workspaceName, "DESTROY", "Failed: %s", getHighLevelError(err))
 
-		// Log detailed error only to environment file (strip ANSI colors)
+		// Log detailed error only to workspace file (strip ANSI colors)
 		cleanError := stripANSIColors(err.Error())
-		logging.LogEnvironmentOnly(envName, "DESTROY: Failed: %s", cleanError)
+		logging.LogWorkspaceOnly(workspaceName, "DESTROY: Failed: %s", cleanError)
 
 		// Add log file location reference to systemd logs for easier debugging
-		logFile := s.getEnvironmentLogFile(envName)
+		logFile := s.getWorkspaceLogFile(workspaceName)
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
-		s.state.SetEnvironmentError(envName, false, err.Error())
+		s.state.SetWorkspaceError(workspaceName, false, err.Error())
 	} else {
-		logging.LogEnvironmentOperation(envName, "DESTROY", "Successfully completed")
-		s.state.SetEnvironmentStatus(envName, StatusDestroyed)
+		logging.LogWorkspaceOperation(workspaceName, "DESTROY", "Successfully completed")
+		s.state.SetWorkspaceStatus(workspaceName, StatusDestroyed)
 	}
 
 	_ = s.SaveState()
@@ -382,13 +382,13 @@ func (s *Scheduler) destroyEnvironment(env environment.Environment) {
 
 // hasConfigChanged checks if any configuration files have been modified
 func (s *Scheduler) hasConfigChanged() bool {
-	environmentsDir := filepath.Join(s.configDir, "environments")
+	workspacesDir := filepath.Join(s.configDir, "workspaces")
 
 	var hasChanged bool
-	envConfigChanges := make(map[string]time.Time)
+	workspaceConfigChanges := make(map[string]time.Time)
 
-	// Walk through all environment directories
-	err := filepath.Walk(environmentsDir, func(path string, info os.FileInfo, err error) error {
+	// Walk through all workspace directories
+	err := filepath.Walk(workspacesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Continue on error
 		}
@@ -399,10 +399,10 @@ func (s *Scheduler) hasConfigChanged() bool {
 				logging.LogSystemd("Config file changed: %s (modified: %s)", path, info.ModTime().Format("2006-01-02 15:04:05"))
 				hasChanged = true
 
-				// Extract environment name from path
-				envName := filepath.Base(filepath.Dir(path))
-				if existingTime, exists := envConfigChanges[envName]; !exists || info.ModTime().After(existingTime) {
-					envConfigChanges[envName] = info.ModTime()
+				// Extract workspace name from path
+				workspaceName := filepath.Base(filepath.Dir(path))
+				if existingTime, exists := workspaceConfigChanges[workspaceName]; !exists || info.ModTime().After(existingTime) {
+					workspaceConfigChanges[workspaceName] = info.ModTime()
 				}
 			}
 		}
@@ -414,28 +414,28 @@ func (s *Scheduler) hasConfigChanged() bool {
 		logging.LogSystemd("Error walking config directory: %v", err)
 	}
 
-	// Update per-environment config modification times and check for immediate deployment
+	// Update per-workspace config modification times and check for immediate deployment
 	now := time.Now()
-	for envName, modTime := range envConfigChanges {
-		s.state.SetEnvironmentConfigModified(envName, modTime)
-		logging.LogSystemd("Environment %s configuration updated, resetting failed state if applicable", envName)
+	for workspaceName, modTime := range workspaceConfigChanges {
+		s.state.SetWorkspaceConfigModified(workspaceName, modTime)
+		logging.LogSystemd("Workspace %s configuration updated, resetting failed state if applicable", workspaceName)
 
-		// Check if this environment should be deployed immediately
-		s.checkEnvironmentForImmediateDeployment(envName, now)
+		// Check if this workspace should be deployed immediately
+		s.checkWorkspaceForImmediateDeployment(workspaceName, now)
 	}
 
 	return hasChanged
 }
 
-// getEnvironmentLogFile returns the log file path for an environment
-func (s *Scheduler) getEnvironmentLogFile(envName string) string {
+// getWorkspaceLogFile returns the log file path for an workspace
+func (s *Scheduler) getWorkspaceLogFile(workspaceName string) string {
 	logDir := getLogDir()
-	return filepath.Join(logDir, fmt.Sprintf("%s.log", envName))
+	return filepath.Join(logDir, fmt.Sprintf("%s.log", workspaceName))
 }
 
 // getLogDir determines the log directory using auto-discovery (same logic as logging package)
 func getLogDir() string {
-	// First check environment variable (explicit override)
+	// First check workspace variable (explicit override)
 	if logDir := os.Getenv("PROVISIONER_LOG_DIR"); logDir != "" {
 		return logDir
 	}
@@ -450,46 +450,46 @@ func getLogDir() string {
 	return "logs"
 }
 
-// checkEnvironmentForImmediateDeployment checks if an environment should be deployed immediately after config change
-func (s *Scheduler) checkEnvironmentForImmediateDeployment(envName string, now time.Time) {
-	// Find the environment by name
-	var targetEnv *environment.Environment
-	for i, env := range s.environments {
-		if env.Name == envName {
-			targetEnv = &s.environments[i]
+// checkWorkspaceForImmediateDeployment checks if an workspace should be deployed immediately after config change
+func (s *Scheduler) checkWorkspaceForImmediateDeployment(workspaceName string, now time.Time) {
+	// Find the workspace by name
+	var targetWorkspace *workspace.Workspace
+	for i, workspace := range s.workspaces {
+		if workspace.Name == workspaceName {
+			targetWorkspace = &s.workspaces[i]
 			break
 		}
 	}
 
-	if targetEnv == nil {
-		logging.LogSystemd("Environment %s not found for immediate deployment check", envName)
+	if targetWorkspace == nil {
+		logging.LogSystemd("Workspace %s not found for immediate deployment check", workspaceName)
 		return
 	}
 
-	// Check if environment is enabled
-	if !targetEnv.Config.Enabled {
-		logging.LogEnvironment(envName, "Environment disabled, skipping immediate deployment")
+	// Check if workspace is enabled
+	if !targetWorkspace.Config.Enabled {
+		logging.LogWorkspace(workspaceName, "Workspace disabled, skipping immediate deployment")
 		return
 	}
 
-	envState := s.state.GetEnvironmentState(envName)
+	workspaceState := s.state.GetWorkspaceState(workspaceName)
 
-	// Skip if environment is currently being deployed or destroyed
-	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
-		logging.LogEnvironment(envName, "Environment is busy (%s), skipping immediate deployment", envState.Status)
+	// Skip if workspace is currently being deployed or destroyed
+	if workspaceState.Status == StatusDeploying || workspaceState.Status == StatusDestroying {
+		logging.LogWorkspace(workspaceName, "Workspace is busy (%s), skipping immediate deployment", workspaceState.Status)
 		return
 	}
 
 	// Check deploy schedules
-	deploySchedules, err := targetEnv.Config.GetDeploySchedules()
+	deploySchedules, err := targetWorkspace.Config.GetDeploySchedules()
 	if err != nil {
-		logging.LogEnvironment(envName, "Invalid deploy schedule for immediate deployment: %v", err)
+		logging.LogWorkspace(workspaceName, "Invalid deploy schedule for immediate deployment: %v", err)
 		return
 	}
 
-	if s.ShouldRunDeploySchedule(deploySchedules, now, envState) {
-		logging.LogEnvironment(envName, "Triggering immediate deployment after config change")
-		go s.deployEnvironment(*targetEnv)
+	if s.ShouldRunDeploySchedule(deploySchedules, now, workspaceState) {
+		logging.LogWorkspace(workspaceName, "Triggering immediate deployment after config change")
+		go s.deployWorkspace(*targetWorkspace)
 	}
 }
 
@@ -514,7 +514,7 @@ func stripANSIColors(text string) string {
 
 // getConfigDir determines the configuration directory using auto-discovery
 func getConfigDir() string {
-	// First check environment variable (explicit override)
+	// First check workspace variable (explicit override)
 	if configDir := os.Getenv("PROVISIONER_CONFIG_DIR"); configDir != "" {
 		return configDir
 	}
@@ -530,7 +530,7 @@ func getConfigDir() string {
 
 // getStateDir determines the state directory using auto-discovery
 func getStateDir() string {
-	// First check environment variable (explicit override)
+	// First check workspace variable (explicit override)
 	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
 		return stateDir
 	}
@@ -544,37 +544,37 @@ func getStateDir() string {
 	return "state"
 }
 
-// ManualDeploy deploys a specific environment immediately, bypassing schedule checks
-func (s *Scheduler) ManualDeploy(envName string) error {
-	// Find the environment by name
-	var targetEnv *environment.Environment
-	for i, env := range s.environments {
-		if env.Name == envName {
-			targetEnv = &s.environments[i]
+// ManualDeploy deploys a specific workspace immediately, bypassing schedule checks
+func (s *Scheduler) ManualDeploy(workspaceName string) error {
+	// Find the workspace by name
+	var targetWorkspace *workspace.Workspace
+	for i, workspace := range s.workspaces {
+		if workspace.Name == workspaceName {
+			targetWorkspace = &s.workspaces[i]
 			break
 		}
 	}
 
-	if targetEnv == nil {
-		return fmt.Errorf("environment '%s' not found in configuration", envName)
+	if targetWorkspace == nil {
+		return fmt.Errorf("workspace '%s' not found in configuration", workspaceName)
 	}
 
-	// Check if environment is enabled
-	if !targetEnv.Config.Enabled {
-		return fmt.Errorf("environment '%s' is disabled in configuration", envName)
+	// Check if workspace is enabled
+	if !targetWorkspace.Config.Enabled {
+		return fmt.Errorf("workspace '%s' is disabled in configuration", workspaceName)
 	}
 
-	envState := s.state.GetEnvironmentState(envName)
+	workspaceState := s.state.GetWorkspaceState(workspaceName)
 
-	// Check if environment is currently busy
-	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
-		return fmt.Errorf("environment '%s' is currently %s, cannot deploy", envName, envState.Status)
+	// Check if workspace is currently busy
+	if workspaceState.Status == StatusDeploying || workspaceState.Status == StatusDestroying {
+		return fmt.Errorf("workspace '%s' is currently %s, cannot deploy", workspaceName, workspaceState.Status)
 	}
 
-	logging.LogSystemd("Manual deployment requested for environment: %s", envName)
+	logging.LogSystemd("Manual deployment requested for workspace: %s", workspaceName)
 
 	// Execute deployment directly (not in goroutine for immediate feedback)
-	s.manualDeployEnvironment(*targetEnv)
+	s.manualDeployWorkspace(*targetWorkspace)
 
 	// Save state after manual operation
 	if err := s.SaveState(); err != nil {
@@ -585,37 +585,37 @@ func (s *Scheduler) ManualDeploy(envName string) error {
 	return nil
 }
 
-// ManualDestroy destroys a specific environment immediately, bypassing schedule checks
-func (s *Scheduler) ManualDestroy(envName string) error {
-	// Find the environment by name
-	var targetEnv *environment.Environment
-	for i, env := range s.environments {
-		if env.Name == envName {
-			targetEnv = &s.environments[i]
+// ManualDestroy destroys a specific workspace immediately, bypassing schedule checks
+func (s *Scheduler) ManualDestroy(workspaceName string) error {
+	// Find the workspace by name
+	var targetWorkspace *workspace.Workspace
+	for i, workspace := range s.workspaces {
+		if workspace.Name == workspaceName {
+			targetWorkspace = &s.workspaces[i]
 			break
 		}
 	}
 
-	if targetEnv == nil {
-		return fmt.Errorf("environment '%s' not found in configuration", envName)
+	if targetWorkspace == nil {
+		return fmt.Errorf("workspace '%s' not found in configuration", workspaceName)
 	}
 
-	// Check if environment is enabled
-	if !targetEnv.Config.Enabled {
-		return fmt.Errorf("environment '%s' is disabled in configuration", envName)
+	// Check if workspace is enabled
+	if !targetWorkspace.Config.Enabled {
+		return fmt.Errorf("workspace '%s' is disabled in configuration", workspaceName)
 	}
 
-	envState := s.state.GetEnvironmentState(envName)
+	workspaceState := s.state.GetWorkspaceState(workspaceName)
 
-	// Check if environment is currently busy
-	if envState.Status == StatusDeploying || envState.Status == StatusDestroying {
-		return fmt.Errorf("environment '%s' is currently %s, cannot destroy", envName, envState.Status)
+	// Check if workspace is currently busy
+	if workspaceState.Status == StatusDeploying || workspaceState.Status == StatusDestroying {
+		return fmt.Errorf("workspace '%s' is currently %s, cannot destroy", workspaceName, workspaceState.Status)
 	}
 
-	logging.LogSystemd("Manual destruction requested for environment: %s", envName)
+	logging.LogSystemd("Manual destruction requested for workspace: %s", workspaceName)
 
 	// Execute destruction directly (not in goroutine for immediate feedback)
-	s.manualDestroyEnvironment(*targetEnv)
+	s.manualDestroyWorkspace(*targetWorkspace)
 
 	// Save state after manual operation
 	if err := s.SaveState(); err != nil {
@@ -626,132 +626,132 @@ func (s *Scheduler) ManualDestroy(envName string) error {
 	return nil
 }
 
-// manualDeployEnvironment is similar to deployEnvironment but for manual operations
-func (s *Scheduler) manualDeployEnvironment(env environment.Environment) {
-	envName := env.Name
-	logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Starting manual deployment")
+// manualDeployWorkspace is similar to deployWorkspace but for manual operations
+func (s *Scheduler) manualDeployWorkspace(workspace workspace.Workspace) {
+	workspaceName := workspace.Name
+	logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY", "Starting manual deployment")
 
-	s.state.SetEnvironmentStatus(envName, StatusDeploying)
+	s.state.SetWorkspaceStatus(workspaceName, StatusDeploying)
 	_ = s.SaveState()
 
 	// Initialize OpenTofu client if not provided
 	if s.client == nil {
 		client, err := opentofu.New()
 		if err != nil {
-			logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Failed to initialize OpenTofu client: %s", err.Error())
-			s.state.SetEnvironmentError(envName, true, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
+			logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY", "Failed to initialize OpenTofu client: %s", err.Error())
+			s.state.SetWorkspaceError(workspaceName, true, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
 			return
 		}
 		s.client = client
 	}
 
-	if err := s.client.Deploy(&env); err != nil {
+	if err := s.client.Deploy(&workspace); err != nil {
 		// Log high-level failure to systemd
-		logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Failed: %s", getHighLevelError(err))
+		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY", "Failed: %s", getHighLevelError(err))
 
-		// Log detailed error only to environment file (strip ANSI colors)
+		// Log detailed error only to workspace file (strip ANSI colors)
 		cleanError := stripANSIColors(err.Error())
-		logging.LogEnvironmentOnly(envName, "MANUAL DEPLOY: Failed: %s", cleanError)
+		logging.LogWorkspaceOnly(workspaceName, "MANUAL DEPLOY: Failed: %s", cleanError)
 
 		// Add log file location reference to systemd logs for easier debugging
-		logFile := s.getEnvironmentLogFile(envName)
+		logFile := s.getWorkspaceLogFile(workspaceName)
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
-		s.state.SetEnvironmentError(envName, true, err.Error())
+		s.state.SetWorkspaceError(workspaceName, true, err.Error())
 	} else {
-		logging.LogEnvironmentOperation(envName, "MANUAL DEPLOY", "Successfully completed")
-		s.state.SetEnvironmentStatus(envName, StatusDeployed)
+		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY", "Successfully completed")
+		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
 	}
 }
 
-// manualDestroyEnvironment is similar to destroyEnvironment but for manual operations
-func (s *Scheduler) manualDestroyEnvironment(env environment.Environment) {
-	envName := env.Name
-	logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Starting manual destruction")
+// manualDestroyWorkspace is similar to destroyWorkspace but for manual operations
+func (s *Scheduler) manualDestroyWorkspace(workspace workspace.Workspace) {
+	workspaceName := workspace.Name
+	logging.LogWorkspaceOperation(workspaceName, "MANUAL DESTROY", "Starting manual destruction")
 
-	s.state.SetEnvironmentStatus(envName, StatusDestroying)
+	s.state.SetWorkspaceStatus(workspaceName, StatusDestroying)
 	_ = s.SaveState()
 
 	// Initialize OpenTofu client if not provided
 	if s.client == nil {
 		client, err := opentofu.New()
 		if err != nil {
-			logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Failed to initialize OpenTofu client: %s", err.Error())
-			s.state.SetEnvironmentError(envName, false, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
+			logging.LogWorkspaceOperation(workspaceName, "MANUAL DESTROY", "Failed to initialize OpenTofu client: %s", err.Error())
+			s.state.SetWorkspaceError(workspaceName, false, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
 			return
 		}
 		s.client = client
 	}
 
-	if err := s.client.DestroyEnvironment(&env); err != nil {
+	if err := s.client.DestroyWorkspace(&workspace); err != nil {
 		// Log high-level failure to systemd
-		logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Failed: %s", getHighLevelError(err))
+		logging.LogWorkspaceOperation(workspaceName, "MANUAL DESTROY", "Failed: %s", getHighLevelError(err))
 
-		// Log detailed error only to environment file (strip ANSI colors)
+		// Log detailed error only to workspace file (strip ANSI colors)
 		cleanError := stripANSIColors(err.Error())
-		logging.LogEnvironmentOnly(envName, "MANUAL DESTROY: Failed: %s", cleanError)
+		logging.LogWorkspaceOnly(workspaceName, "MANUAL DESTROY: Failed: %s", cleanError)
 
 		// Add log file location reference to systemd logs for easier debugging
-		logFile := s.getEnvironmentLogFile(envName)
+		logFile := s.getWorkspaceLogFile(workspaceName)
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
-		s.state.SetEnvironmentError(envName, false, err.Error())
+		s.state.SetWorkspaceError(workspaceName, false, err.Error())
 	} else {
-		logging.LogEnvironmentOperation(envName, "MANUAL DESTROY", "Successfully completed")
-		s.state.SetEnvironmentStatus(envName, StatusDestroyed)
+		logging.LogWorkspaceOperation(workspaceName, "MANUAL DESTROY", "Successfully completed")
+		s.state.SetWorkspaceStatus(workspaceName, StatusDestroyed)
 	}
 }
 
-// ShowStatus displays the status of environments
-func (s *Scheduler) ShowStatus(envName string) error {
-	if err := s.LoadEnvironments(); err != nil {
-		return fmt.Errorf("failed to load environments: %w", err)
+// ShowStatus displays the status of workspaces
+func (s *Scheduler) ShowStatus(workspaceName string) error {
+	if err := s.LoadWorkspaces(); err != nil {
+		return fmt.Errorf("failed to load workspaces: %w", err)
 	}
 
 	if err := s.LoadState(); err != nil {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
 
-	if envName != "" {
-		// Show specific environment status
-		env := s.findEnvironment(envName)
-		if env == nil {
-			return fmt.Errorf("environment '%s' not found", envName)
+	if workspaceName != "" {
+		// Show specific workspace status
+		workspace := s.findWorkspace(workspaceName)
+		if workspace == nil {
+			return fmt.Errorf("workspace '%s' not found", workspaceName)
 		}
-		s.printEnvironmentStatus(*env)
+		s.printWorkspaceStatus(*workspace)
 	} else {
-		// Show all environments status
-		fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n", "ENVIRONMENT", "STATUS", "LAST DEPLOYED", "LAST DESTROYED", "ERRORS")
+		// Show all workspaces status
+		fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n", "WORKSPACE", "STATUS", "LAST DEPLOYED", "LAST DESTROYED", "ERRORS")
 		fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n", "-----------", "------", "-------------", "--------------", "------")
 
-		for _, env := range s.environments {
-			state := s.state.GetEnvironmentState(env.Name)
-			s.printEnvironmentStatusLine(env, state)
+		for _, workspace := range s.workspaces {
+			state := s.state.GetWorkspaceState(workspace.Name)
+			s.printWorkspaceStatusLine(workspace, state)
 		}
 	}
 
 	return nil
 }
 
-// ListEnvironments displays all configured environments
-func (s *Scheduler) ListEnvironments() error {
-	if err := s.LoadEnvironments(); err != nil {
-		return fmt.Errorf("failed to load environments: %w", err)
+// ListWorkspaces displays all configured workspaces
+func (s *Scheduler) ListWorkspaces() error {
+	if err := s.LoadWorkspaces(); err != nil {
+		return fmt.Errorf("failed to load workspaces: %w", err)
 	}
 
-	fmt.Printf("%-15s %-8s %-30s %-30s\n", "ENVIRONMENT", "ENABLED", "DEPLOY SCHEDULE", "DESTROY SCHEDULE")
+	fmt.Printf("%-15s %-8s %-30s %-30s\n", "WORKSPACE", "ENABLED", "DEPLOY SCHEDULE", "DESTROY SCHEDULE")
 	fmt.Printf("%-15s %-8s %-30s %-30s\n", "-----------", "-------", "---------------", "----------------")
 
-	for _, env := range s.environments {
-		deploySchedules, _ := env.Config.GetDeploySchedules()
-		destroySchedules, _ := env.Config.GetDestroySchedules()
+	for _, workspace := range s.workspaces {
+		deploySchedules, _ := workspace.Config.GetDeploySchedules()
+		destroySchedules, _ := workspace.Config.GetDestroySchedules()
 
 		deploySchedule := formatSchedules(deploySchedules)
 		destroySchedule := formatSchedules(destroySchedules)
 
 		fmt.Printf("%-15s %-8t %-30s %-30s\n",
-			env.Name,
-			env.Config.Enabled,
+			workspace.Name,
+			workspace.Config.Enabled,
 			deploySchedule,
 			destroySchedule)
 	}
@@ -759,22 +759,22 @@ func (s *Scheduler) ListEnvironments() error {
 	return nil
 }
 
-// ShowLogs displays recent logs for an environment
-func (s *Scheduler) ShowLogs(envName string) error {
-	if err := s.LoadEnvironments(); err != nil {
-		return fmt.Errorf("failed to load environments: %w", err)
+// ShowLogs displays recent logs for an workspace
+func (s *Scheduler) ShowLogs(workspaceName string) error {
+	if err := s.LoadWorkspaces(); err != nil {
+		return fmt.Errorf("failed to load workspaces: %w", err)
 	}
 
-	env := s.findEnvironment(envName)
-	if env == nil {
-		return fmt.Errorf("environment '%s' not found", envName)
+	workspace := s.findWorkspace(workspaceName)
+	if workspace == nil {
+		return fmt.Errorf("workspace '%s' not found", workspaceName)
 	}
 
-	logFile := s.getEnvironmentLogFile(envName)
+	logFile := s.getWorkspaceLogFile(workspaceName)
 
 	// Check if log file exists
 	if _, err := os.Stat(logFile); os.IsNotExist(err) {
-		fmt.Printf("No log file found for environment '%s'\n", envName)
+		fmt.Printf("No log file found for workspace '%s'\n", workspaceName)
 		fmt.Printf("Expected location: %s\n", logFile)
 		return nil
 	}
@@ -785,7 +785,7 @@ func (s *Scheduler) ShowLogs(envName string) error {
 		return fmt.Errorf("failed to read log file: %w", err)
 	}
 
-	fmt.Printf("=== Recent logs for environment '%s' ===\n", envName)
+	fmt.Printf("=== Recent logs for workspace '%s' ===\n", workspaceName)
 	fmt.Printf("Log file: %s\n\n", logFile)
 	fmt.Print(string(data))
 
@@ -794,32 +794,32 @@ func (s *Scheduler) ShowLogs(envName string) error {
 
 // Helper methods for CLI commands
 
-func (s *Scheduler) findEnvironment(name string) *environment.Environment {
-	for _, env := range s.environments {
-		if env.Name == name {
-			return &env
+func (s *Scheduler) findWorkspace(name string) *workspace.Workspace {
+	for _, workspace := range s.workspaces {
+		if workspace.Name == name {
+			return &workspace
 		}
 	}
 	return nil
 }
 
-func (s *Scheduler) printEnvironmentStatus(env environment.Environment) {
-	state := s.state.GetEnvironmentState(env.Name)
+func (s *Scheduler) printWorkspaceStatus(workspace workspace.Workspace) {
+	state := s.state.GetWorkspaceState(workspace.Name)
 
-	deploySchedules, _ := env.Config.GetDeploySchedules()
-	destroySchedules, _ := env.Config.GetDestroySchedules()
+	deploySchedules, _ := workspace.Config.GetDeploySchedules()
+	destroySchedules, _ := workspace.Config.GetDestroySchedules()
 
 	// Use actual OpenTofu state as source of truth for deployment status
-	actualStatus := env.GetDeploymentStatus()
+	actualStatus := workspace.GetDeploymentStatus()
 
-	fmt.Printf("Environment: %s\n", env.Name)
+	fmt.Printf("Workspace: %s\n", workspace.Name)
 	fmt.Printf("Status: %s\n", actualStatus)
-	fmt.Printf("Enabled: %t\n", env.Config.Enabled)
+	fmt.Printf("Enabled: %t\n", workspace.Config.Enabled)
 	fmt.Printf("Deploy Schedule: %s\n", formatSchedules(deploySchedules))
 	fmt.Printf("Destroy Schedule: %s\n", formatSchedules(destroySchedules))
 
 	// Use filesystem timestamps as more accurate source, fall back to managed state
-	if stateChangeTime := env.GetLastStateChangeTime(); stateChangeTime != nil {
+	if stateChangeTime := workspace.GetLastStateChangeTime(); stateChangeTime != nil {
 		if actualStatus == "deployed" {
 			fmt.Printf("Last Deployed: %s\n", stateChangeTime.Format("2006-01-02 15:04:05"))
 			if state.LastDestroyed != nil {
@@ -862,19 +862,19 @@ func (s *Scheduler) printEnvironmentStatus(env environment.Environment) {
 		fmt.Printf("Last Destroy Error: %s\n", state.LastDestroyError)
 	}
 
-	logFile := s.getEnvironmentLogFile(env.Name)
+	logFile := s.getWorkspaceLogFile(workspace.Name)
 	fmt.Printf("Log File: %s\n", logFile)
 }
 
-func (s *Scheduler) printEnvironmentStatusLine(env environment.Environment, state *EnvironmentState) {
+func (s *Scheduler) printWorkspaceStatusLine(workspace workspace.Workspace, state *WorkspaceState) {
 	// Use actual OpenTofu state as source of truth for deployment status
-	actualStatus := env.GetDeploymentStatus()
+	actualStatus := workspace.GetDeploymentStatus()
 
 	// Use filesystem timestamps as more accurate source, fall back to managed state
 	lastDeployed := "Never"
 	lastDestroyed := "Never"
 
-	if stateChangeTime := env.GetLastStateChangeTime(); stateChangeTime != nil {
+	if stateChangeTime := workspace.GetLastStateChangeTime(); stateChangeTime != nil {
 		if actualStatus == "deployed" {
 			lastDeployed = stateChangeTime.Format("2006-01-02 15:04")
 			// Use managed state for last destroyed if available
@@ -904,7 +904,7 @@ func (s *Scheduler) printEnvironmentStatusLine(env environment.Environment, stat
 	}
 
 	fmt.Printf("%-15s %-12s %-20s %-20s %-10s\n",
-		env.Name,
+		workspace.Name,
 		actualStatus,
 		lastDeployed,
 		lastDestroyed,

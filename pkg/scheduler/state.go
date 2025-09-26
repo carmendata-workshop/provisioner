@@ -8,37 +8,37 @@ import (
 	"time"
 )
 
-type EnvironmentStatus string
+type WorkspaceStatus string
 
 const (
-	StatusDeployed      EnvironmentStatus = "deployed"
-	StatusDestroyed     EnvironmentStatus = "destroyed"
-	StatusPending       EnvironmentStatus = "pending"
-	StatusDeploying     EnvironmentStatus = "deploying"
-	StatusDestroying    EnvironmentStatus = "destroying"
-	StatusDeployFailed  EnvironmentStatus = "deploy_failed"
-	StatusDestroyFailed EnvironmentStatus = "destroy_failed"
+	StatusDeployed      WorkspaceStatus = "deployed"
+	StatusDestroyed     WorkspaceStatus = "destroyed"
+	StatusPending       WorkspaceStatus = "pending"
+	StatusDeploying     WorkspaceStatus = "deploying"
+	StatusDestroying    WorkspaceStatus = "destroying"
+	StatusDeployFailed  WorkspaceStatus = "deploy_failed"
+	StatusDestroyFailed WorkspaceStatus = "destroy_failed"
 )
 
-type EnvironmentState struct {
-	Name              string            `json:"name"`
-	Status            EnvironmentStatus `json:"status"`
-	LastDeployed      *time.Time        `json:"last_deployed,omitempty"`
-	LastDestroyed     *time.Time        `json:"last_destroyed,omitempty"`
-	LastDeployError   string            `json:"last_deploy_error,omitempty"`
-	LastDestroyError  string            `json:"last_destroy_error,omitempty"`
-	LastConfigModified *time.Time       `json:"last_config_modified,omitempty"`
+type WorkspaceState struct {
+	Name               string          `json:"name"`
+	Status             WorkspaceStatus `json:"status"`
+	LastDeployed       *time.Time      `json:"last_deployed,omitempty"`
+	LastDestroyed      *time.Time      `json:"last_destroyed,omitempty"`
+	LastDeployError    string          `json:"last_deploy_error,omitempty"`
+	LastDestroyError   string          `json:"last_destroy_error,omitempty"`
+	LastConfigModified *time.Time      `json:"last_config_modified,omitempty"`
 }
 
 type State struct {
-	Environments map[string]*EnvironmentState `json:"environments"`
-	LastUpdated  time.Time                    `json:"last_updated"`
+	Workspaces  map[string]*WorkspaceState `json:"workspaces"`
+	LastUpdated time.Time                  `json:"last_updated"`
 }
 
 func NewState() *State {
 	return &State{
-		Environments: make(map[string]*EnvironmentState),
-		LastUpdated:  time.Now(),
+		Workspaces:  make(map[string]*WorkspaceState),
+		LastUpdated: time.Now(),
 	}
 }
 
@@ -57,8 +57,8 @@ func LoadState(statePath string) (*State, error) {
 		return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 	}
 
-	if state.Environments == nil {
-		state.Environments = make(map[string]*EnvironmentState)
+	if state.Workspaces == nil {
+		state.Workspaces = make(map[string]*WorkspaceState)
 	}
 
 	return &state, nil
@@ -84,66 +84,66 @@ func (s *State) SaveState(statePath string) error {
 	return nil
 }
 
-func (s *State) GetEnvironmentState(name string) *EnvironmentState {
-	if env, exists := s.Environments[name]; exists {
-		return env
+func (s *State) GetWorkspaceState(name string) *WorkspaceState {
+	if workspace, exists := s.Workspaces[name]; exists {
+		return workspace
 	}
 
-	// Create new environment state
-	env := &EnvironmentState{
+	// Create new workspace state
+	workspace := &WorkspaceState{
 		Name:   name,
 		Status: StatusDestroyed,
 	}
-	s.Environments[name] = env
-	return env
+	s.Workspaces[name] = workspace
+	return workspace
 }
 
-func (s *State) SetEnvironmentStatus(name string, status EnvironmentStatus) {
-	env := s.GetEnvironmentState(name)
-	env.Status = status
+func (s *State) SetWorkspaceStatus(name string, status WorkspaceStatus) {
+	workspace := s.GetWorkspaceState(name)
+	workspace.Status = status
 
 	now := time.Now()
 	switch status {
 	case StatusDeployed:
-		env.LastDeployed = &now
-		env.LastDeployError = ""
+		workspace.LastDeployed = &now
+		workspace.LastDeployError = ""
 	case StatusDestroyed:
-		env.LastDestroyed = &now
-		env.LastDestroyError = ""
+		workspace.LastDestroyed = &now
+		workspace.LastDestroyError = ""
 	}
 }
 
-func (s *State) SetEnvironmentError(name string, isDeployError bool, errorMsg string) {
-	env := s.GetEnvironmentState(name)
+func (s *State) SetWorkspaceError(name string, isDeployError bool, errorMsg string) {
+	workspace := s.GetWorkspaceState(name)
 
 	if isDeployError {
-		env.LastDeployError = errorMsg
-		env.Status = StatusDeployFailed
+		workspace.LastDeployError = errorMsg
+		workspace.Status = StatusDeployFailed
 	} else {
-		env.LastDestroyError = errorMsg
-		env.Status = StatusDestroyFailed
+		workspace.LastDestroyError = errorMsg
+		workspace.Status = StatusDestroyFailed
 	}
 }
 
-// SetEnvironmentConfigModified updates the last config modification time for an environment
-func (s *State) SetEnvironmentConfigModified(name string, modTime time.Time) {
-	env := s.GetEnvironmentState(name)
-	env.LastConfigModified = &modTime
+// SetWorkspaceConfigModified updates the last config modification time for an workspace
+func (s *State) SetWorkspaceConfigModified(name string, modTime time.Time) {
+	workspace := s.GetWorkspaceState(name)
+	workspace.LastConfigModified = &modTime
 
 	// Handle state transitions based on current status when config is modified
-	switch env.Status {
+	switch workspace.Status {
 	case StatusDeployFailed:
-		// If environment was in deploy failed state, allow retries
-		env.Status = StatusDestroyed
-		env.LastDeployError = ""
+		// If workspace was in deploy failed state, allow retries
+		workspace.Status = StatusDestroyed
+		workspace.LastDeployError = ""
 	case StatusDestroyFailed:
-		// If environment was in destroy failed state, allow retries
-		env.Status = StatusDeployed
-		env.LastDestroyError = ""
+		// If workspace was in destroy failed state, allow retries
+		workspace.Status = StatusDeployed
+		workspace.LastDestroyError = ""
 	case StatusDeployed:
-		// If environment is deployed and config was modified, trigger redeployment
-		env.Status = StatusDestroyed
+		// If workspace is deployed and config was modified, trigger redeployment
+		workspace.Status = StatusDestroyed
 		// Clear deployment timestamp to ensure redeployment
-		env.LastDeployed = nil
+		workspace.LastDeployed = nil
 	}
 }

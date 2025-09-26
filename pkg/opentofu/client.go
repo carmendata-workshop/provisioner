@@ -9,9 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/opentofu/tofudl"
-	"provisioner/pkg/environment"
 	"provisioner/pkg/template"
+	"provisioner/pkg/workspace"
+
+	"github.com/opentofu/tofudl"
 )
 
 type Client struct {
@@ -70,7 +71,7 @@ func (c *Client) Init(workingDir string) error {
 
 	err := cmd.Run()
 
-	// Include detailed output in error for environment logs
+	// Include detailed output in error for workspace logs
 	if err != nil {
 		if stderr.Len() > 0 {
 			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
@@ -93,7 +94,7 @@ func (c *Client) Plan(workingDir string) error {
 
 	err := cmd.Run()
 
-	// Include detailed output in error for environment logs
+	// Include detailed output in error for workspace logs
 	if err != nil {
 		if stderr.Len() > 0 {
 			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
@@ -116,7 +117,7 @@ func (c *Client) Apply(workingDir string) error {
 
 	err := cmd.Run()
 
-	// Include detailed output in error for environment logs
+	// Include detailed output in error for workspace logs
 	if err != nil {
 		if stderr.Len() > 0 {
 			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
@@ -139,7 +140,7 @@ func (c *Client) Destroy(workingDir string) error {
 
 	err := cmd.Run()
 
-	// Include detailed output in error for environment logs
+	// Include detailed output in error for workspace logs
 	if err != nil {
 		if stderr.Len() > 0 {
 			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
@@ -152,19 +153,19 @@ func (c *Client) Destroy(workingDir string) error {
 	return err
 }
 
-func (c *Client) Deploy(env *environment.Environment) error {
-	// Create persistent working directory based on environment name
+func (c *Client) Deploy(ws *workspace.Workspace) error {
+	// Create persistent working directory based on workspace name
 	stateDir := getStateDir()
-	workingDir := filepath.Join(stateDir, "deployments", env.Name)
+	workingDir := filepath.Join(stateDir, "deployments", ws.Name)
 
 	// Ensure working directory exists
 	if err := os.MkdirAll(workingDir, 0755); err != nil {
 		return fmt.Errorf("failed to create working directory: %w", err)
 	}
 
-	// Copy environment template files to working directory (preserving state files)
-	if err := copyEnvironmentTemplateFiles(env, workingDir); err != nil {
-		return fmt.Errorf("failed to copy environment files: %w", err)
+	// Copy workspace template files to working directory (preserving state files)
+	if err := copyWorkspaceTemplateFiles(ws, workingDir); err != nil {
+		return fmt.Errorf("failed to copy workspace files: %w", err)
 	}
 
 	// Run OpenTofu sequence: init → plan → apply
@@ -183,19 +184,19 @@ func (c *Client) Deploy(env *environment.Environment) error {
 	return nil
 }
 
-func (c *Client) DestroyEnvironment(env *environment.Environment) error {
-	// Use persistent working directory based on environment name
+func (c *Client) DestroyWorkspace(ws *workspace.Workspace) error {
+	// Use persistent working directory based on workspace name
 	stateDir := getStateDir()
-	workingDir := filepath.Join(stateDir, "deployments", env.Name)
+	workingDir := filepath.Join(stateDir, "deployments", ws.Name)
 
 	// Ensure working directory exists
 	if err := os.MkdirAll(workingDir, 0755); err != nil {
 		return fmt.Errorf("failed to create working directory: %w", err)
 	}
 
-	// Copy environment template files to working directory (preserving state files)
-	if err := copyEnvironmentTemplateFiles(env, workingDir); err != nil {
-		return fmt.Errorf("failed to copy environment files: %w", err)
+	// Copy workspace template files to working directory (preserving state files)
+	if err := copyWorkspaceTemplateFiles(ws, workingDir); err != nil {
+		return fmt.Errorf("failed to copy workspace files: %w", err)
 	}
 
 	// Run OpenTofu sequence: init → destroy
@@ -210,28 +211,28 @@ func (c *Client) DestroyEnvironment(env *environment.Environment) error {
 	return nil
 }
 
-// copyEnvironmentTemplateFiles copies template files to working directory while preserving OpenTofu state
-func copyEnvironmentTemplateFiles(env *environment.Environment, workingDir string) error {
+// copyWorkspaceTemplateFiles copies template files to working directory while preserving OpenTofu state
+func copyWorkspaceTemplateFiles(ws *workspace.Workspace, workingDir string) error {
 	// Determine source directory for templates
 	srcDir := ""
 	templateName := ""
 	templateHash := ""
 
-	if env.IsUsingTemplate() {
+	if ws.IsUsingTemplate() {
 		// Using a template reference - copy from template directory
-		srcDir = env.GetTemplateDir()
+		srcDir = ws.GetTemplateDir()
 		if srcDir == "" {
-			return fmt.Errorf("template directory not found for template '%s'", env.Config.Template)
+			return fmt.Errorf("template directory not found for template '%s'", ws.Config.Template)
 		}
-		templateName = env.Config.Template
+		templateName = ws.Config.Template
 
 		// Get template hash for change tracking
-		if hash, err := getTemplateHash(env.Config.Template); err == nil {
+		if hash, err := getTemplateHash(ws.Config.Template); err == nil {
 			templateHash = hash
 		}
 	} else {
-		// Using local files - copy from environment directory
-		srcDir = env.Path
+		// Using local files - copy from workspace directory
+		srcDir = ws.Path
 	}
 
 	// Copy template files while preserving state
@@ -242,7 +243,7 @@ func copyEnvironmentTemplateFiles(env *environment.Environment, workingDir strin
 	// Update deployment metadata with template information
 	if templateName != "" {
 		stateDir := getStateDir()
-		if err := environment.UpdateDeploymentTemplate(stateDir, env.Name, templateName, templateHash); err != nil {
+		if err := workspace.UpdateDeploymentTemplate(stateDir, ws.Name, templateName, templateHash); err != nil {
 			// Log warning but don't fail deployment
 			fmt.Printf("Warning: failed to update deployment template metadata: %v\n", err)
 		}
@@ -251,7 +252,7 @@ func copyEnvironmentTemplateFiles(env *environment.Environment, workingDir strin
 	return nil
 }
 
-// copyDirectoryFiles copies files from src to dst while preserving OpenTofu state and environment files
+// copyDirectoryFiles copies files from src to dst while preserving OpenTofu state and workspace files
 func copyDirectoryFiles(src, dst string) error {
 	// Clean working directory first (preserve important files)
 	if err := cleanWorkingDirectory(dst); err != nil {
@@ -319,7 +320,7 @@ func shouldPreserveFile(relPath string) bool {
 		return true
 	}
 
-	// Preserve environment-specific variable files
+	// Preserve workspace-specific variable files
 	if strings.HasSuffix(relPath, ".tfvars") || strings.HasSuffix(relPath, ".tfvars.json") {
 		return true
 	}
@@ -342,7 +343,7 @@ func shouldPreserveFile(relPath string) bool {
 	return false
 }
 
-// cleanWorkingDirectory removes stale files while preserving important environment-specific files
+// cleanWorkingDirectory removes stale files while preserving important workspace-specific files
 func cleanWorkingDirectory(workingDir string) error {
 	// Check if directory exists
 	if _, err := os.Stat(workingDir); os.IsNotExist(err) {
@@ -376,7 +377,7 @@ func cleanWorkingDirectory(workingDir string) error {
 
 // getStateDir determines the state directory using auto-discovery
 func getStateDir() string {
-	// First check environment variable (explicit override)
+	// First check workspace variable (explicit override)
 	if stateDir := os.Getenv("PROVISIONER_STATE_DIR"); stateDir != "" {
 		return stateDir
 	}
@@ -395,22 +396,22 @@ func getStateDir() string {
 	return "state"
 }
 
-// GetWorkingDir returns the working directory for an environment
-func GetWorkingDir(envName string) string {
+// GetWorkingDir returns the working directory for a workspace
+func GetWorkingDir(wsName string) string {
 	stateDir := getStateDir()
-	return filepath.Join(stateDir, "deployments", envName)
+	return filepath.Join(stateDir, "deployments", wsName)
 }
 
-// WorkingDirExists checks if a working directory exists for an environment
-func WorkingDirExists(envName string) bool {
-	workingDir := GetWorkingDir(envName)
+// WorkingDirExists checks if a working directory exists for a workspace
+func WorkingDirExists(wsName string) bool {
+	workingDir := GetWorkingDir(wsName)
 	_, err := os.Stat(workingDir)
 	return err == nil
 }
 
-// CleanWorkingDir removes the working directory for an environment
-func CleanWorkingDir(envName string) error {
-	workingDir := GetWorkingDir(envName)
+// CleanWorkingDir removes the working directory for a workspace
+func CleanWorkingDir(wsName string) error {
+	workingDir := GetWorkingDir(wsName)
 	return os.RemoveAll(workingDir)
 }
 
