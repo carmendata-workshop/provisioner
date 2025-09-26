@@ -500,25 +500,25 @@ sudo journalctl -u provisioner --since "1 hour ago"
 When installed via the installer, files are organized according to the Linux Filesystem Hierarchy Standard:
 
 ```
-/opt/provisioner/              # Application binary
+/opt/provisioner/             # Application binary
 ├── provisioner
 
-/etc/provisioner/              # Configuration files
+/etc/provisioner/             # Configuration files
 ├── environments/
 │   └── example/
 │       ├── main.tf           # OpenTofu template
 │       └── config.json       # Environment configuration
 
-/var/lib/provisioner/          # State and template data
+/var/lib/provisioner/         # State and template data
 ├── scheduler.json            # Environment state persistence
 ├── templates/                # Template storage
 │   ├── registry.json         # Template metadata registry
-│   ├── web-app-v2/          # Template content
+│   ├── web-app-v2/           # Template content
 │   │   ├── main.tf
 │   │   └── variables.tf
 │   └── database/
 │       └── main.tf
-└── workspaces/               # Environment working directories
+└── deployments/              # Environment working directories
     ├── my-web-env/
     │   ├── main.tf           # Copied from template
     │   ├── terraform.tfstate # Environment state
@@ -582,7 +582,7 @@ make validate-commits
 - **File-based state** - Uses JSON for persistence
 - **Standard library only** - Minimal external dependencies
 - **Single instance deployment** - No clustering or scaling
-- **Temporary working directories** - Each operation uses isolated workspace
+- **Temporary working directories** - Each operation uses isolated working directory
 - **Automatic versioning** - Based on conventional commit messages
 
 ## Logging
@@ -694,7 +694,7 @@ The template registry (`registry.json`) tracks metadata:
 Each environment gets its own isolated working directory:
 
 ```
-/var/lib/provisioner/workspaces/
+/var/lib/provisioner/deployments/
 ├── my-web-env/
 │   ├── main.tf                     # Copied from template
 │   ├── variables.tf                # Additional template files

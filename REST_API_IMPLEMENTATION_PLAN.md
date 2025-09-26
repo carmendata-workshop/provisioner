@@ -274,7 +274,7 @@ func CORS(next http.Handler) http.Handler {
 #### 5.2 Shared State Management
 - API server reads from same state files as scheduler
 - No state synchronization issues since both run in same process
-- OpenTofu operations use same workspace directories
+- OpenTofu operations use same working directories
 
 #### 5.3 Configuration Loading
 - API server uses same environment discovery as CLI tools

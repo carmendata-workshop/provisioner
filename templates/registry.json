@@ -2,7 +2,7 @@
   "templates": {
     "dev-server": {
       "name": "dev-server",
-      "source_url": "file:///workspaces/provisioner/examples/templates/dev-server",
+      "source_url": "file:///provisioner/examples/templates/dev-server",
       "source_ref": "main",
       "created_at": "2025-09-23T20:52:56.425927588Z",
       "updated_at": "2025-09-23T20:52:56.425928005Z",
@@ -10,7 +10,7 @@
     },
     "prod-cluster": {
       "name": "prod-cluster",
-      "source_url": "file:///workspaces/provisioner/examples/templates/prod-cluster",
+      "source_url": "file:///provisioner/examples/templates/prod-cluster",
       "source_ref": "main",
       "created_at": "2025-09-23T20:52:56.45070292Z",
       "updated_at": "2025-09-23T20:52:56.450703086Z",

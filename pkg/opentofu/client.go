@@ -155,7 +155,7 @@ func (c *Client) Destroy(workingDir string) error {
 func (c *Client) Deploy(env *environment.Environment) error {
 	// Create persistent working directory based on environment name
 	stateDir := getStateDir()
-	workingDir := filepath.Join(stateDir, "workspaces", env.Name)
+	workingDir := filepath.Join(stateDir, "deployments", env.Name)
 
 	// Ensure working directory exists
 	if err := os.MkdirAll(workingDir, 0755); err != nil {
@@ -186,7 +186,7 @@ func (c *Client) Deploy(env *environment.Environment) error {
 func (c *Client) DestroyEnvironment(env *environment.Environment) error {
 	// Use persistent working directory based on environment name
 	stateDir := getStateDir()
-	workingDir := filepath.Join(stateDir, "workspaces", env.Name)
+	workingDir := filepath.Join(stateDir, "deployments", env.Name)
 
 	// Ensure working directory exists
 	if err := os.MkdirAll(workingDir, 0755); err != nil {
@@ -239,12 +239,12 @@ func copyEnvironmentTemplateFiles(env *environment.Environment, workingDir strin
 		return err
 	}
 
-	// Update workspace metadata with template information
+	// Update deployment metadata with template information
 	if templateName != "" {
 		stateDir := getStateDir()
-		if err := environment.UpdateWorkspaceTemplate(stateDir, env.Name, templateName, templateHash); err != nil {
+		if err := environment.UpdateDeploymentTemplate(stateDir, env.Name, templateName, templateHash); err != nil {
 			// Log warning but don't fail deployment
-			fmt.Printf("Warning: failed to update workspace template metadata: %v\n", err)
+			fmt.Printf("Warning: failed to update deployment template metadata: %v\n", err)
 		}
 	}
 
@@ -398,7 +398,7 @@ func getStateDir() string {
 // GetWorkingDir returns the working directory for an environment
 func GetWorkingDir(envName string) string {
 	stateDir := getStateDir()
-	return filepath.Join(stateDir, "workspaces", envName)
+	return filepath.Join(stateDir, "deployments", envName)
 }
 
 // WorkingDirExists checks if a working directory exists for an environment

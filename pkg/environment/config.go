@@ -183,10 +183,10 @@ func (e *Environment) GetDeploymentStatus() string {
 func (e *Environment) getStateFilePath() string {
 	stateDir := getStateDir()
 
-	// Try new workspace structure first
-	workspaceStateFile := filepath.Join(stateDir, "workspaces", e.Name, "terraform.tfstate")
-	if _, err := os.Stat(workspaceStateFile); err == nil {
-		return workspaceStateFile
+	// Try new deployment structure first
+	deploymentStateFile := filepath.Join(stateDir, "deployments", e.Name, "terraform.tfstate")
+	if _, err := os.Stat(deploymentStateFile); err == nil {
+		return deploymentStateFile
 	}
 
 	// Fall back to old structure (direct in state dir)
@@ -195,8 +195,8 @@ func (e *Environment) getStateFilePath() string {
 		return oldStateFile
 	}
 
-	// Default to workspace structure (for consistency)
-	return workspaceStateFile
+	// Default to deployment structure (for consistency)
+	return deploymentStateFile
 }
 
 // getStateDir returns the state directory using the same logic as OpenTofu client

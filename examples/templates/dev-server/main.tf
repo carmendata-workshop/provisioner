@@ -1,5 +1,5 @@
 # Template: dev-server
-# Source: file:///workspaces/provisioner/templates/dev-server
+# Source: file:///provisioner/templates/dev-server
 # Ref: main
 # Path: 
 

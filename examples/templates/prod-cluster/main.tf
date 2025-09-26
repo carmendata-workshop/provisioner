@@ -1,5 +1,5 @@
 # Template: prod-cluster
-# Source: file:///workspaces/provisioner/templates/prod-cluster
+# Source: file:///provisioner/templates/prod-cluster
 # Ref: main
 # Path: 
 
