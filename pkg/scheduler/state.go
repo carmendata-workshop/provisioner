@@ -28,6 +28,7 @@ type WorkspaceState struct {
 	LastDeployError    string          `json:"last_deploy_error,omitempty"`
 	LastDestroyError   string          `json:"last_destroy_error,omitempty"`
 	LastConfigModified *time.Time      `json:"last_config_modified,omitempty"`
+	DeploymentMode     string          `json:"deployment_mode,omitempty"`
 }
 
 type State struct {
@@ -146,4 +147,9 @@ func (s *State) SetWorkspaceConfigModified(name string, modTime time.Time) {
 		// Clear deployment timestamp to ensure redeployment
 		workspace.LastDeployed = nil
 	}
+}
+
+// SetWorkspaceState updates the entire workspace state
+func (s *State) SetWorkspaceState(name string, workspaceState *WorkspaceState) {
+	s.Workspaces[name] = workspaceState
 }

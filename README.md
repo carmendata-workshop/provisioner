@@ -12,6 +12,7 @@ The Provisioner automatically manages OpenTofu workspaces on a schedule, allowin
 
 ## Features
 
+- **Mode-based deployments** - Deploy workspaces in different resource configurations (hibernation, busy, maintenance) with automatic mode transitions
 - **Enhanced CRON scheduling** - Supports ranges, lists, intervals, and mixed combinations
 - **Multiple schedule support** - Deploy/destroy workspaces at different times using arrays of CRON expressions
 - **Template management system** - Centralized template storage with version control and sharing
@@ -156,6 +157,24 @@ Both `deploy_schedule` and `destroy_schedule` can accept either a single CRON ex
 }
 ```
 
+**Mode-Based Scheduling:**
+For dynamic resource scaling, use `mode_schedules` instead of `deploy_schedule`:
+
+```json
+{
+  "enabled": true,
+  "template": "web-app-v2",
+  "mode_schedules": {
+    "hibernation": ["0 23 * * 1-5", "0 0 * * 6,0"],
+    "quiet": "0 6 * * 1-5",
+    "busy": ["0 8 * * 1-5", "0 13 * * 1-5"],
+    "maintenance": "0 2 * * 0"
+  },
+  "destroy_schedule": "0 1 * * 0",
+  "description": "Dynamic scaling with multiple deployment modes"
+}
+```
+
 **Permanent Deployments:**
 Set `destroy_schedule` to `false` for workspaces that should never be automatically destroyed:
 
@@ -172,7 +191,8 @@ Set `destroy_schedule` to `false` for workspaces that should never be automatica
 **Field descriptions:**
 - `enabled` - Whether workspace should be processed by scheduler
 - `template` - (Optional) Reference to managed template by name
-- `deploy_schedule` - CRON expression(s) for deployment times (string or array of strings)
+- `deploy_schedule` - CRON expression(s) for deployment times (string or array of strings) - **mutually exclusive with `mode_schedules`**
+- `mode_schedules` - Map of deployment modes to CRON schedules for dynamic scaling - **requires `template` field**
 - `destroy_schedule` - CRON expression(s) for destruction times (string, array of strings, or `false` for permanent)
 - `description` - Human-readable description
 
@@ -182,10 +202,13 @@ Set `destroy_schedule` to `false` for workspaces that should never be automatica
 3. **Error** - No template found
 
 **Schedule Behavior:**
+- **Traditional scheduling** (`deploy_schedule`): Workspace deploys/destroys at specified times
+- **Mode-based scheduling** (`mode_schedules`): Workspace transitions between different resource configurations
 - **Single schedule**: Workspace deploys/destroys at the specified time
 - **Multiple schedules**: Workspace deploys/destroys when ANY of the schedules match
 - **Mixed formats**: Can mix single and multiple schedules (e.g., multiple deploy schedules with single destroy schedule)
 - **Permanent deployment**: Use `destroy_schedule: false` to never automatically destroy
+- **Mode transitions**: Workspace stays in current mode until another mode schedule triggers or destroy_schedule runs
 
 ### main.tf
 Standard OpenTofu/Terraform configuration file with your infrastructure definition.
@@ -718,12 +741,25 @@ The provisioner provides several commands for managing and monitoring workspaces
 
 **Deploy Workspace**
 ```bash
-workspacectl deploy my-app
+workspacectl deploy my-app                    # Traditional deployment or interactive mode selection
+workspacectl deploy my-app busy               # Deploy in specific mode (mode-based workspaces)
 ```
 - Validates workspace exists and is enabled
+- For mode-based workspaces: prompts for mode selection if not specified
+- For traditional workspaces: deploys using configured deploy_schedule logic
 - Checks workspace is not currently deploying/destroying
 - Executes deployment immediately using OpenTofu
 - Updates state and provides detailed logging
+
+**Change Workspace Mode**
+```bash
+workspacectl mode my-app hibernation          # Change to hibernation mode
+workspacectl mode my-app busy                 # Change to busy mode
+```
+- Direct mode change for mode-based workspaces
+- Validates mode is available in workspace template
+- Confirms mode change if workspace is already deployed in different mode
+- Updates deployment mode state tracking
 
 **Destroy Workspace**
 ```bash

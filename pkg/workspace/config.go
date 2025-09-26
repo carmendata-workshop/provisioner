@@ -10,11 +10,12 @@ import (
 )
 
 type Config struct {
-	Enabled         bool        `json:"enabled"`
-	Template        string      `json:"template,omitempty"`
-	DeploySchedule  interface{} `json:"deploy_schedule"`
-	DestroySchedule interface{} `json:"destroy_schedule"`
-	Description     string      `json:"description"`
+	Enabled         bool                       `json:"enabled"`
+	Template        string                     `json:"template,omitempty"`
+	DeploySchedule  interface{}                `json:"deploy_schedule"`
+	DestroySchedule interface{}                `json:"destroy_schedule"`
+	ModeSchedules   map[string]interface{}     `json:"mode_schedules,omitempty"`
+	Description     string                     `json:"description"`
 }
 
 type Workspace struct {
@@ -424,6 +425,54 @@ func RemoveWorkspace(name string) error {
 	return nil
 }
 
+// Validate validates the workspace configuration
+func (c *Config) Validate() error {
+	hasModeSchedules := c.ModeSchedules != nil && len(c.ModeSchedules) > 0
+	hasDeploySchedule := c.DeploySchedule != nil
+
+	// Mutually exclusive validation
+	if hasModeSchedules && hasDeploySchedule {
+		return fmt.Errorf("cannot specify both 'mode_schedules' and 'deploy_schedule'")
+	}
+
+	if !hasModeSchedules && !hasDeploySchedule {
+		return fmt.Errorf("must specify either 'mode_schedules' or 'deploy_schedule'")
+	}
+
+	// Mode schedules require template
+	if hasModeSchedules && c.Template == "" {
+		return fmt.Errorf("'mode_schedules' requires 'template' field")
+	}
+
+	// Validate individual mode schedules
+	if hasModeSchedules {
+		for mode, schedule := range c.ModeSchedules {
+			if _, err := normalizeScheduleField(schedule); err != nil {
+				return fmt.Errorf("invalid schedule for mode '%s': %w", mode, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetModeSchedules returns all mode schedules as a map of mode -> []string
+func (c *Config) GetModeSchedules() (map[string][]string, error) {
+	if c.ModeSchedules == nil {
+		return nil, nil
+	}
+
+	result := make(map[string][]string)
+	for mode, schedule := range c.ModeSchedules {
+		schedules, err := normalizeScheduleField(schedule)
+		if err != nil {
+			return nil, fmt.Errorf("invalid schedule for mode '%s': %w", mode, err)
+		}
+		result[mode] = schedules
+	}
+	return result, nil
+}
+
 // ValidateWorkspace validates a workspace's configuration and OpenTofu syntax
 func ValidateWorkspace(name string) error {
 	workspacesDir := getDefaultWorkspacesDir()
@@ -441,6 +490,11 @@ func ValidateWorkspace(name string) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
+	// Validate config structure and schedule logic
+	if err := config.Validate(); err != nil {
+		return fmt.Errorf("config validation failed: %w", err)
+	}
+
 	// Create workspace object for validation
 	ws := Workspace{
 		Name:   name,
@@ -453,7 +507,7 @@ func ValidateWorkspace(name string) error {
 		return fmt.Errorf("no valid OpenTofu configuration found (missing main.tf)")
 	}
 
-	// Validate schedules
+	// Validate schedules (legacy validation for backward compatibility)
 	if config.DeploySchedule != nil {
 		if _, err := config.GetDeploySchedules(); err != nil {
 			return fmt.Errorf("invalid deploy schedule: %w", err)

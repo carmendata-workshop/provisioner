@@ -626,6 +626,96 @@ func (s *Scheduler) ManualDestroy(workspaceName string) error {
 	return nil
 }
 
+// GetWorkspace returns a workspace by name
+func (s *Scheduler) GetWorkspace(workspaceName string) *workspace.Workspace {
+	for i, workspace := range s.workspaces {
+		if workspace.Name == workspaceName {
+			return &s.workspaces[i]
+		}
+	}
+	return nil
+}
+
+// ManualDeployInMode deploys a specific workspace in a specific mode immediately
+func (s *Scheduler) ManualDeployInMode(workspaceName, mode string) error {
+	// Find the workspace by name
+	targetWorkspace := s.GetWorkspace(workspaceName)
+	if targetWorkspace == nil {
+		return fmt.Errorf("workspace '%s' not found in configuration", workspaceName)
+	}
+
+	// Check if workspace is enabled
+	if !targetWorkspace.Config.Enabled {
+		return fmt.Errorf("workspace '%s' is disabled in configuration", workspaceName)
+	}
+
+	// Validate mode if workspace uses mode scheduling
+	if len(targetWorkspace.Config.ModeSchedules) > 0 {
+		modeSchedules, err := targetWorkspace.Config.GetModeSchedules()
+		if err != nil {
+			return fmt.Errorf("invalid mode schedules for workspace '%s': %w", workspaceName, err)
+		}
+
+		// Check if requested mode is available
+		if _, exists := modeSchedules[mode]; !exists {
+			availableModes := make([]string, 0, len(modeSchedules))
+			for availableMode := range modeSchedules {
+				availableModes = append(availableModes, availableMode)
+			}
+			return fmt.Errorf("mode '%s' not available for workspace '%s'. Available modes: %v", mode, workspaceName, availableModes)
+		}
+	} else if targetWorkspace.Config.DeploySchedule != nil {
+		// Traditional workspace - reject mode parameter
+		return fmt.Errorf("workspace '%s' uses traditional scheduling. Use 'deploy' command without mode parameter", workspaceName)
+	}
+
+	workspaceState := s.state.GetWorkspaceState(workspaceName)
+
+	// Check if workspace is currently busy
+	if workspaceState.Status == StatusDeploying || workspaceState.Status == StatusDestroying {
+		return fmt.Errorf("workspace '%s' is currently %s, cannot deploy", workspaceName, workspaceState.Status)
+	}
+
+	// Get current deployment mode
+	currentMode := workspaceState.DeploymentMode
+	if currentMode == mode && workspaceState.Status == StatusDeployed {
+		fmt.Printf("Workspace '%s' is already deployed in '%s' mode.\n", workspaceName, mode)
+		return nil
+	}
+
+	// Confirm mode change if already deployed in different mode
+	if currentMode != "" && currentMode != mode && workspaceState.Status == StatusDeployed {
+		fmt.Printf("Workspace '%s' is currently deployed in '%s' mode.\n", workspaceName, currentMode)
+		fmt.Printf("Change to '%s' mode? (y/N): ", mode)
+		var response string
+		if _, err := fmt.Scanln(&response); err != nil {
+			fmt.Println("Cancelled")
+			return nil
+		}
+		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+			fmt.Println("Cancelled")
+			return nil
+		}
+	}
+
+	logging.LogSystemd("Manual deployment requested for workspace: %s in mode: %s", workspaceName, mode)
+
+	// Set the deployment mode in state
+	workspaceState.DeploymentMode = mode
+	s.state.SetWorkspaceState(workspaceName, workspaceState)
+
+	// Execute deployment directly (not in goroutine for immediate feedback)
+	s.manualDeployWorkspaceInMode(*targetWorkspace, mode)
+
+	// Save state after manual operation
+	if err := s.SaveState(); err != nil {
+		logging.LogSystemd("Error saving state after manual deploy: %v", err)
+		return fmt.Errorf("deployment completed but failed to save state: %w", err)
+	}
+
+	return nil
+}
+
 // manualDeployWorkspace is similar to deployWorkspace but for manual operations
 func (s *Scheduler) manualDeployWorkspace(workspace workspace.Workspace) {
 	workspaceName := workspace.Name
@@ -661,6 +751,49 @@ func (s *Scheduler) manualDeployWorkspace(workspace workspace.Workspace) {
 	} else {
 		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY", "Successfully completed")
 		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
+	}
+}
+
+// manualDeployWorkspaceInMode is similar to manualDeployWorkspace but deploys in a specific mode
+func (s *Scheduler) manualDeployWorkspaceInMode(workspace workspace.Workspace, mode string) {
+	workspaceName := workspace.Name
+	logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY MODE", "Starting manual deployment in mode: %s", mode)
+
+	s.state.SetWorkspaceStatus(workspaceName, StatusDeploying)
+	_ = s.SaveState()
+
+	// Initialize OpenTofu client if not provided
+	if s.client == nil {
+		client, err := opentofu.New()
+		if err != nil {
+			logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY MODE", "Failed to initialize OpenTofu client: %s", err.Error())
+			s.state.SetWorkspaceError(workspaceName, true, fmt.Sprintf("Failed to initialize OpenTofu client: %s", err.Error()))
+			return
+		}
+		s.client = client
+	}
+
+	if err := s.client.DeployInMode(&workspace, mode); err != nil {
+		// Log high-level failure to systemd
+		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY MODE", "Failed in mode %s: %s", mode, getHighLevelError(err))
+
+		// Log detailed error only to workspace file (strip ANSI colors)
+		cleanError := stripANSIColors(err.Error())
+		logging.LogWorkspaceOnly(workspaceName, "MANUAL DEPLOY MODE (%s): Failed: %s", mode, cleanError)
+
+		// Add log file location reference to systemd logs for easier debugging
+		logFile := s.getWorkspaceLogFile(workspaceName)
+		logging.LogSystemd("For detailed error information see: %s", logFile)
+
+		s.state.SetWorkspaceError(workspaceName, true, err.Error())
+	} else {
+		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY MODE", "Successfully completed in mode: %s", mode)
+		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
+
+		// Update deployment mode in state
+		workspaceState := s.state.GetWorkspaceState(workspaceName)
+		workspaceState.DeploymentMode = mode
+		s.state.SetWorkspaceState(workspaceName, workspaceState)
 	}
 }
 

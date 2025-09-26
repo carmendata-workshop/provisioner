@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "template": "web-app",
+  "mode_schedules": {
+    "hibernation": "0 23 * * 1-5",
+    "busy": ["0 8 * * 1-5", "0 13 * * 1-5"],
+    "maintenance": "0 2 * * 0"
+  },
+  "description": "Example workspace using mode-based scheduling for auto-scaling (disabled by default)"
+}

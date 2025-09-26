@@ -130,6 +130,52 @@ func (c *Client) Apply(workingDir string) error {
 	return err
 }
 
+func (c *Client) PlanWithMode(workingDir, mode string) error {
+	cmd := exec.Command(c.binaryPath, "plan", "-var", fmt.Sprintf("deployment_mode=%s", mode))
+	cmd.Dir = workingDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// Include detailed output in error for workspace logs
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
+}
+
+func (c *Client) ApplyWithMode(workingDir, mode string) error {
+	cmd := exec.Command(c.binaryPath, "apply", "-auto-approve", "-var", fmt.Sprintf("deployment_mode=%s", mode))
+	cmd.Dir = workingDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// Include detailed output in error for workspace logs
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
+}
+
 func (c *Client) Destroy(workingDir string) error {
 	cmd := exec.Command(c.binaryPath, "destroy", "-auto-approve")
 	cmd.Dir = workingDir
@@ -178,6 +224,37 @@ func (c *Client) Deploy(ws *workspace.Workspace) error {
 	}
 
 	if err := c.Apply(workingDir); err != nil {
+		return fmt.Errorf("apply failed: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Client) DeployInMode(ws *workspace.Workspace, mode string) error {
+	// Create persistent working directory based on workspace name
+	stateDir := getStateDir()
+	workingDir := filepath.Join(stateDir, "deployments", ws.Name)
+
+	// Ensure working directory exists
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
+		return fmt.Errorf("failed to create working directory: %w", err)
+	}
+
+	// Copy workspace template files to working directory (preserving state files)
+	if err := copyWorkspaceTemplateFiles(ws, workingDir); err != nil {
+		return fmt.Errorf("failed to copy workspace files: %w", err)
+	}
+
+	// Run OpenTofu sequence: init → plan → apply with mode variable
+	if err := c.Init(workingDir); err != nil {
+		return fmt.Errorf("init failed: %w", err)
+	}
+
+	if err := c.PlanWithMode(workingDir, mode); err != nil {
+		return fmt.Errorf("plan failed: %w", err)
+	}
+
+	if err := c.ApplyWithMode(workingDir, mode); err != nil {
 		return fmt.Errorf("apply failed: %w", err)
 	}
 

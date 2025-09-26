@@ -4,19 +4,25 @@ import "provisioner/pkg/workspace"
 
 // MockTofuClient is a mock implementation of TofuClient for testing
 type MockTofuClient struct {
-	DeployFunc       func(ws *workspace.Workspace) error
-	DestroyFunc      func(ws *workspace.Workspace) error
-	DeployCallCount  int
-	DestroyCallCount int
-	DeployCallWorkspaces   []*workspace.Workspace
-	DestroyCallWorkspaces  []*workspace.Workspace
+	DeployFunc         func(ws *workspace.Workspace) error
+	DeployInModeFunc   func(ws *workspace.Workspace, mode string) error
+	DestroyFunc        func(ws *workspace.Workspace) error
+	DeployCallCount    int
+	DeployInModeCallCount int
+	DestroyCallCount   int
+	DeployCallWorkspaces     []*workspace.Workspace
+	DeployInModeCallWorkspaces []*workspace.Workspace
+	DeployInModeCalls        []string // Track mode parameters
+	DestroyCallWorkspaces    []*workspace.Workspace
 }
 
 // NewMockTofuClient creates a new mock client with default success behavior
 func NewMockTofuClient() *MockTofuClient {
 	return &MockTofuClient{
-		DeployCallWorkspaces:  make([]*workspace.Workspace, 0),
-		DestroyCallWorkspaces: make([]*workspace.Workspace, 0),
+		DeployCallWorkspaces:       make([]*workspace.Workspace, 0),
+		DeployInModeCallWorkspaces: make([]*workspace.Workspace, 0),
+		DeployInModeCalls:          make([]string, 0),
+		DestroyCallWorkspaces:      make([]*workspace.Workspace, 0),
 	}
 }
 
@@ -27,6 +33,20 @@ func (m *MockTofuClient) Deploy(ws *workspace.Workspace) error {
 
 	if m.DeployFunc != nil {
 		return m.DeployFunc(ws)
+	}
+
+	// Default success behavior
+	return nil
+}
+
+// DeployInMode mocks the deploy in mode operation
+func (m *MockTofuClient) DeployInMode(ws *workspace.Workspace, mode string) error {
+	m.DeployInModeCallCount++
+	m.DeployInModeCallWorkspaces = append(m.DeployInModeCallWorkspaces, ws)
+	m.DeployInModeCalls = append(m.DeployInModeCalls, mode)
+
+	if m.DeployInModeFunc != nil {
+		return m.DeployInModeFunc(ws, mode)
 	}
 
 	// Default success behavior
@@ -49,8 +69,11 @@ func (m *MockTofuClient) DestroyWorkspace(ws *workspace.Workspace) error {
 // Reset clears all call counts and workspaces
 func (m *MockTofuClient) Reset() {
 	m.DeployCallCount = 0
+	m.DeployInModeCallCount = 0
 	m.DestroyCallCount = 0
 	m.DeployCallWorkspaces = m.DeployCallWorkspaces[:0]
+	m.DeployInModeCallWorkspaces = m.DeployInModeCallWorkspaces[:0]
+	m.DeployInModeCalls = m.DeployInModeCalls[:0]
 	m.DestroyCallWorkspaces = m.DestroyCallWorkspaces[:0]
 }
 

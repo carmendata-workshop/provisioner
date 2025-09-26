@@ -16,16 +16,17 @@ func printUsage() {
 Workspace management CLI for OpenTofu Workspace Scheduler.
 
 Commands:
-  deploy WORKSPACE      Deploy specific workspace immediately
-  destroy WORKSPACE     Destroy specific workspace immediately
-  status [WORKSPACE]    Show status of all workspaces or specific workspace
-  list [--detailed]       List all configured workspaces
-  logs WORKSPACE        Show recent logs for specific workspace
-  add NAME [OPTIONS]      Add new workspace
-  show NAME               Show detailed workspace information
-  update NAME [OPTIONS]   Update existing workspace
-  remove NAME [--force]   Remove workspace
-  validate NAME|--all     Validate workspace configuration
+  deploy WORKSPACE [MODE]  Deploy specific workspace immediately (with optional mode)
+  destroy WORKSPACE        Destroy specific workspace immediately
+  mode WORKSPACE MODE      Change workspace to specific mode
+  status [WORKSPACE]       Show status of all workspaces or specific workspace
+  list [--detailed]        List all configured workspaces
+  logs WORKSPACE           Show recent logs for specific workspace
+  add NAME [OPTIONS]       Add new workspace
+  show NAME                Show detailed workspace information
+  update NAME [OPTIONS]    Update existing workspace
+  remove NAME [--force]    Remove workspace
+  validate NAME|--all      Validate workspace configuration
 
 Add/Update Options:
   --template TEMPLATE            Use specified template
@@ -42,8 +43,10 @@ Global Options:
 
 Examples:
   %s list                                    # List all workspaces
-  %s deploy my-app                          # Deploy 'my-app' immediately
-  %s destroy test-workspace                       # Destroy 'test-workspace' immediately
+  %s deploy my-app                          # Deploy 'my-app' (prompts for mode if needed)
+  %s deploy my-app busy                     # Deploy 'my-app' in 'busy' mode
+  %s mode my-app hibernation                # Change 'my-app' to hibernation mode
+  %s destroy test-workspace                 # Destroy 'test-workspace' immediately
   %s status                                 # Show status of all workspaces
   %s status my-app                          # Show detailed status of 'my-app'
   %s logs my-app                            # Show recent logs for 'my-app'
@@ -53,7 +56,7 @@ Examples:
 Related Tools:
   provisioner      Workspace scheduler daemon
   templatectl      Template management CLI
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 }
 
 func main() {
@@ -61,16 +64,54 @@ func main() {
 	if len(os.Args) >= 2 {
 		command := os.Args[1]
 
-		// Handle manual operations (deploy/destroy)
-		if command == "deploy" || command == "destroy" {
+		// Handle deploy command (supports optional mode)
+		if command == "deploy" {
+			if len(os.Args) < 3 || len(os.Args) > 4 {
+				fmt.Fprintf(os.Stderr, "Error: deploy command requires workspace name and optional mode\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			workspaceName := os.Args[2]
+			var mode string
+			if len(os.Args) == 4 {
+				mode = os.Args[3]
+			}
+
+			if err := runDeployCommand(workspaceName, mode); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle destroy command
+		if command == "destroy" {
 			if len(os.Args) != 3 {
-				fmt.Fprintf(os.Stderr, "Error: %s command requires exactly one workspace name\n\n", command)
+				fmt.Fprintf(os.Stderr, "Error: destroy command requires exactly one workspace name\n\n")
 				printUsage()
 				os.Exit(2)
 			}
 
 			workspaceName := os.Args[2]
 			if err := runManualOperation(command, workspaceName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle mode command
+		if command == "mode" {
+			if len(os.Args) != 4 {
+				fmt.Fprintf(os.Stderr, "Error: mode command requires workspace name and mode\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			workspaceName := os.Args[2]
+			mode := os.Args[3]
+			if err := runModeCommand(workspaceName, mode); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -227,4 +268,92 @@ func runLogsCommand(workspaceName string) error {
 
 	// Use the ShowLogs method
 	return sched.ShowLogs(workspaceName)
+}
+
+func runDeployCommand(workspaceName, mode string) error {
+	// Initialize scheduler in quiet mode for CLI
+	sched := scheduler.NewQuiet()
+
+	// Load workspaces to validate the specified workspace exists
+	if err := sched.LoadWorkspaces(); err != nil {
+		return fmt.Errorf("failed to load workspaces: %w", err)
+	}
+
+	// Load state to check current workspace status
+	if err := sched.LoadState(); err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	// If mode is specified, deploy in that mode
+	if mode != "" {
+		return sched.ManualDeployInMode(workspaceName, mode)
+	}
+
+	// Check if workspace uses mode scheduling
+	workspace := sched.GetWorkspace(workspaceName)
+	if workspace == nil {
+		return fmt.Errorf("workspace '%s' not found", workspaceName)
+	}
+
+	// Handle mode-based workspaces
+	if len(workspace.Config.ModeSchedules) > 0 {
+		// Get available modes
+		modeSchedules, err := workspace.Config.GetModeSchedules()
+		if err != nil {
+			return fmt.Errorf("failed to get mode schedules: %w", err)
+		}
+
+		modes := make([]string, 0, len(modeSchedules))
+		for mode := range modeSchedules {
+			modes = append(modes, mode)
+		}
+
+		// Prompt user for mode selection
+		selectedMode, err := promptForMode(modes)
+		if err != nil {
+			return err
+		}
+
+		return sched.ManualDeployInMode(workspaceName, selectedMode)
+	}
+
+	// Handle traditional deploy_schedule workspaces
+	return sched.ManualDeploy(workspaceName)
+}
+
+func runModeCommand(workspaceName, mode string) error {
+	// Initialize scheduler in quiet mode for CLI
+	sched := scheduler.NewQuiet()
+
+	// Load workspaces to validate the specified workspace exists
+	if err := sched.LoadWorkspaces(); err != nil {
+		return fmt.Errorf("failed to load workspaces: %w", err)
+	}
+
+	// Load state to check current workspace status
+	if err := sched.LoadState(); err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	// Execute the mode change
+	return sched.ManualDeployInMode(workspaceName, mode)
+}
+
+func promptForMode(modes []string) (string, error) {
+	fmt.Printf("Workspace uses mode-based scheduling. Select deployment mode:\n")
+	for i, mode := range modes {
+		fmt.Printf("%d) %s\n", i+1, mode)
+	}
+
+	fmt.Printf("Enter choice (1-%d): ", len(modes))
+	var choice int
+	if _, err := fmt.Scanln(&choice); err != nil {
+		return "", fmt.Errorf("invalid input: %w", err)
+	}
+
+	if choice < 1 || choice > len(modes) {
+		return "", fmt.Errorf("choice must be between 1 and %d", len(modes))
+	}
+
+	return modes[choice-1], nil
 }
