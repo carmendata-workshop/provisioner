@@ -1,0 +1,11 @@
+{
+  "name": "log-rotation",
+  "type": "script",
+  "schedule": "0 1 * * *",
+  "script": "#!/bin/bash\nset -e\n\nLOG_DIR=\"/var/log/provisioner\"\nMAX_SIZE=\"100M\"\nMAX_DAYS=30\n\necho \"Starting log rotation for provisioner logs...\"\n\nif [ ! -d \"$LOG_DIR\" ]; then\n    echo \"Log directory $LOG_DIR does not exist\"\n    exit 0\nfi\n\n# Find and compress large log files\nfind \"$LOG_DIR\" -name '*.log' -size \"+$MAX_SIZE\" -exec gzip {} \\;\n\n# Remove old compressed logs\nfind \"$LOG_DIR\" -name '*.log.gz' -mtime \"+$MAX_DAYS\" -delete\n\n# Count remaining log files\nlog_count=$(find \"$LOG_DIR\" -name '*.log*' | wc -l)\necho \"Log rotation completed. $log_count log files remaining.\"",
+  "working_dir": "/",
+  "timeout": "10m",
+  "enabled": true,
+  "description": "Daily rotation and cleanup of provisioner log files",
+  "tags": ["logs", "maintenance", "cleanup"]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "backup-configs",
+  "type": "script",
+  "schedule": "0 3 * * 0",
+  "script": "#!/bin/bash\nset -e\n\nBACKUP_DIR=\"/var/backups/provisioner-$(date +%Y%m%d)\"\nmkdir -p \"$BACKUP_DIR\"\n\necho \"Creating configuration backup...\"\ncp -r /etc/provisioner/workspaces \"$BACKUP_DIR/\"\ncp -r /var/lib/provisioner/templates \"$BACKUP_DIR/\"\ncp /var/lib/provisioner/scheduler.json \"$BACKUP_DIR/\" 2>/dev/null || true\n\necho \"Creating tarball...\"\ntar -czf \"$BACKUP_DIR.tar.gz\" -C \"$(dirname \"$BACKUP_DIR\")\" \"$(basename \"$BACKUP_DIR\")\"\nrm -rf \"$BACKUP_DIR\"\n\necho \"Backup completed: $BACKUP_DIR.tar.gz\"\n\n# Keep only last 4 backups\nfind /var/backups -name 'provisioner-*.tar.gz' -type f | sort -r | tail -n +5 | xargs rm -f",
+  "environment": {
+    "PATH": "/usr/local/bin:/usr/bin:/bin"
+  },
+  "timeout": "30m",
+  "enabled": true,
+  "description": "Weekly backup of provisioner configurations and templates",
+  "tags": ["backup", "maintenance"]
+}

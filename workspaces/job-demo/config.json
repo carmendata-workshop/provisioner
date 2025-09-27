@@ -1,0 +1,58 @@
+{
+  "enabled": true,
+  "template": "web-app",
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "Demo workspace showcasing job scheduling functionality",
+  "jobs": [
+    {
+      "name": "backup-data",
+      "type": "script",
+      "schedule": "0 2 * * *",
+      "script": "#!/bin/bash\necho \"Starting backup at $(date)\"\nmkdir -p /tmp/backups\necho \"Backup data: $(date)\" > /tmp/backups/backup-$(date +%Y%m%d).txt\necho \"Backup completed at $(date)\"",
+      "timeout": "30m",
+      "enabled": true,
+      "description": "Daily backup job"
+    },
+    {
+      "name": "health-check",
+      "type": "command",
+      "schedule": ["0 */6 * * *", "30 */6 * * *"],
+      "command": "curl -f http://localhost:8080/health || echo 'Health check failed'",
+      "timeout": "5m",
+      "enabled": true,
+      "description": "Health check every 6 hours"
+    },
+    {
+      "name": "cleanup-logs",
+      "type": "script",
+      "schedule": "0 1 * * 0",
+      "script": "#!/bin/bash\necho \"Cleaning up old logs...\"\nfind /tmp -name '*.log' -mtime +7 -delete\necho \"Log cleanup completed\"",
+      "timeout": "15m",
+      "enabled": true,
+      "description": "Weekly log cleanup"
+    },
+    {
+      "name": "deploy-monitoring",
+      "type": "template",
+      "schedule": "0 10 * * 1",
+      "template": "monitoring-stack",
+      "timeout": "10m",
+      "enabled": false,
+      "description": "Weekly monitoring deployment (disabled)"
+    },
+    {
+      "name": "custom-task",
+      "type": "script",
+      "schedule": "*/15 * * * *",
+      "script": "#!/bin/bash\necho \"Custom task running at $(date)\"\necho \"WORKSPACE_ID: $WORKSPACE_ID\"\necho \"JOB_NAME: $JOB_NAME\"\necho \"WORKSPACE_DEPLOYMENT_DIR: $WORKSPACE_DEPLOYMENT_DIR\"",
+      "environment": {
+        "CUSTOM_VAR": "demo-value",
+        "LOG_LEVEL": "info"
+      },
+      "timeout": "2m",
+      "enabled": true,
+      "description": "Frequent custom task with environment variables"
+    }
+  ]
+}

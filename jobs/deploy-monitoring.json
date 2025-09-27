@@ -1,0 +1,14 @@
+{
+  "name": "deploy-monitoring",
+  "type": "template",
+  "schedule": "0 1 * * *",
+  "template": "monitoring",
+  "environment": {
+    "MONITORING_MODE": "standalone",
+    "ALERT_EMAIL": "admin@example.com"
+  },
+  "timeout": "15m",
+  "enabled": false,
+  "description": "Deploy monitoring infrastructure daily (requires monitoring template)",
+  "tags": ["monitoring", "template"]
+}

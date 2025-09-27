@@ -1,0 +1,9 @@
+{
+  "name": "test-simple",
+  "type": "command",
+  "schedule": "0 * * * *",
+  "command": "echo 'Hello from standalone job!'",
+  "timeout": "1m",
+  "enabled": true,
+  "description": "Simple test job for verification"
+}

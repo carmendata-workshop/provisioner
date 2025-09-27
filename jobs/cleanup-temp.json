@@ -1,0 +1,9 @@
+{
+  "name": "cleanup-temp",
+  "type": "script",
+  "schedule": "0 2 * * *",
+  "script": "#!/bin/bash\necho \"Cleaning up temporary files...\"\nfind /tmp -type f -name '*.tmp' -mtime +1 -delete\nfind /tmp -type f -name 'core.*' -mtime +7 -delete\necho \"Cleanup completed\"",
+  "timeout": "10m",
+  "enabled": true,
+  "description": "Daily cleanup of temporary files and core dumps"
+}

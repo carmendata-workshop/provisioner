@@ -8,30 +8,40 @@ import (
 	"strings"
 	"time"
 
+	"provisioner/pkg/job"
 	"provisioner/pkg/logging"
 	"provisioner/pkg/opentofu"
+	"provisioner/pkg/template"
 	"provisioner/pkg/workspace"
 )
 
 type Scheduler struct {
-	workspaces      []workspace.Workspace
-	state           *State
-	client          opentofu.TofuClient
-	statePath       string
-	stopChan        chan bool
-	lastConfigCheck time.Time
-	configDir       string
-	quietMode       bool
+	workspaces            []workspace.Workspace
+	state                 *State
+	client                opentofu.TofuClient
+	jobManager            *job.Manager
+	standaloneJobManager  *job.StandaloneJobManager
+	templateManager       *template.Manager
+	statePath             string
+	stopChan              chan bool
+	lastConfigCheck       time.Time
+	configDir             string
+	quietMode             bool
 }
 
 func New() *Scheduler {
 	configDir := getConfigDir()
 	stateDir := getStateDir()
 
+	// Initialize template manager
+	templatesDir := filepath.Join(stateDir, "templates")
+	templateManager := template.NewManager(templatesDir)
+
 	return &Scheduler{
-		statePath: filepath.Join(stateDir, "scheduler.json"),
-		stopChan:  make(chan bool),
-		configDir: configDir,
+		statePath:       filepath.Join(stateDir, "scheduler.json"),
+		stopChan:        make(chan bool),
+		configDir:       configDir,
+		templateManager: templateManager,
 	}
 }
 
@@ -39,11 +49,25 @@ func NewWithClient(client opentofu.TofuClient) *Scheduler {
 	configDir := getConfigDir()
 	stateDir := getStateDir()
 
+	// Initialize template manager
+	templatesDir := filepath.Join(stateDir, "templates")
+	templateManager := template.NewManager(templatesDir)
+
+	// Initialize job manager
+	jobManager := job.NewManager(stateDir, client, templateManager)
+
+	// Initialize standalone job manager
+	jobsDir := filepath.Join(configDir, "jobs")
+	standaloneJobManager := job.NewStandaloneJobManager(jobsDir, stateDir, jobManager)
+
 	return &Scheduler{
-		client:    client,
-		statePath: filepath.Join(stateDir, "scheduler.json"),
-		stopChan:  make(chan bool),
-		configDir: configDir,
+		client:               client,
+		statePath:            filepath.Join(stateDir, "scheduler.json"),
+		stopChan:             make(chan bool),
+		configDir:            configDir,
+		templateManager:      templateManager,
+		jobManager:           jobManager,
+		standaloneJobManager: standaloneJobManager,
 	}
 }
 
@@ -52,11 +76,26 @@ func NewQuiet() *Scheduler {
 	configDir := getConfigDir()
 	stateDir := getStateDir()
 
+	// Initialize template manager
+	templatesDir := filepath.Join(stateDir, "templates")
+	templateManager := template.NewManager(templatesDir)
+
+	// Initialize job manager with mock client for CLI operations
+	mockClient := &opentofu.MockTofuClient{}
+	jobManager := job.NewManager(stateDir, mockClient, templateManager)
+
+	// Initialize standalone job manager
+	jobsDir := filepath.Join(configDir, "jobs")
+	standaloneJobManager := job.NewStandaloneJobManager(jobsDir, stateDir, jobManager)
+
 	return &Scheduler{
-		statePath: filepath.Join(stateDir, "scheduler.json"),
-		stopChan:  make(chan bool),
-		configDir: configDir,
-		quietMode: true,
+		statePath:            filepath.Join(stateDir, "scheduler.json"),
+		stopChan:             make(chan bool),
+		configDir:            configDir,
+		quietMode:            true,
+		templateManager:      templateManager,
+		jobManager:           jobManager,
+		standaloneJobManager: standaloneJobManager,
 	}
 }
 
@@ -135,6 +174,21 @@ func (s *Scheduler) Start() {
 		s.client = client
 	}
 
+	// Initialize job manager now that we have a client
+	if s.jobManager == nil {
+		stateDir := getStateDir()
+		s.jobManager = job.NewManager(stateDir, s.client, s.templateManager)
+
+		// Initialize standalone job manager
+		jobsDir := filepath.Join(s.configDir, "jobs")
+		s.standaloneJobManager = job.NewStandaloneJobManager(jobsDir, stateDir, s.jobManager)
+
+		// Load job state
+		if err := s.jobManager.LoadState(); err != nil {
+			logging.LogSystemd("Failed to load job state: %v", err)
+		}
+	}
+
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
@@ -179,6 +233,20 @@ func (s *Scheduler) checkSchedules() {
 	if err := s.SaveState(); err != nil {
 		logging.LogSystemd("Error saving state: %v", err)
 	}
+
+	// Process standalone jobs
+	if s.standaloneJobManager != nil {
+		if err := s.standaloneJobManager.ProcessStandaloneJobs(); err != nil {
+			logging.LogSystemd("Error processing standalone jobs: %v", err)
+		}
+	}
+
+	// Save job state after checking all schedules
+	if s.jobManager != nil {
+		if err := s.jobManager.SaveState(); err != nil {
+			logging.LogSystemd("Error saving job state: %v", err)
+		}
+	}
 }
 
 func (s *Scheduler) checkWorkspaceSchedules(workspace workspace.Workspace, now time.Time) {
@@ -209,6 +277,31 @@ func (s *Scheduler) checkWorkspaceSchedules(workspace workspace.Workspace, now t
 	} else if s.ShouldRunDestroySchedule(destroySchedules, now, workspaceState) {
 		logging.LogWorkspace(workspace.Name, "Triggering destruction")
 		go s.destroyWorkspace(workspace)
+	}
+
+	// Process jobs if job manager is available
+	if s.jobManager != nil {
+		jobConfigs := workspace.Config.GetJobConfigs()
+		if len(jobConfigs) > 0 {
+			// Convert JobConfig to interface{} for the job manager
+			jobConfigInterfaces := make([]interface{}, len(jobConfigs))
+			for i, jobConfig := range jobConfigs {
+				jobConfigInterfaces[i] = map[string]interface{}{
+					"name":        jobConfig.Name,
+					"type":        jobConfig.Type,
+					"schedule":    jobConfig.Schedule,
+					"script":      jobConfig.Script,
+					"command":     jobConfig.Command,
+					"template":    jobConfig.Template,
+					"environment": jobConfig.Environment,
+					"working_dir": jobConfig.WorkingDir,
+					"timeout":     jobConfig.Timeout,
+					"enabled":     jobConfig.Enabled,
+					"description": jobConfig.Description,
+				}
+			}
+			s.jobManager.ProcessWorkspaceJobs(workspace.Name, jobConfigInterfaces, now)
+		}
 	}
 }
 
@@ -419,6 +512,11 @@ func (s *Scheduler) hasConfigChanged() bool {
 	for workspaceName, modTime := range workspaceConfigChanges {
 		s.state.SetWorkspaceConfigModified(workspaceName, modTime)
 		logging.LogSystemd("Workspace %s configuration updated, resetting failed state if applicable", workspaceName)
+
+		// Notify job manager of config changes
+		if s.jobManager != nil {
+			s.jobManager.SetJobConfigModified(workspaceName, modTime)
+		}
 
 		// Check if this workspace should be deployed immediately
 		s.checkWorkspaceForImmediateDeployment(workspaceName, now)
@@ -1052,4 +1150,122 @@ func formatSchedules(schedules []string) string {
 		return schedules[0]
 	}
 	return fmt.Sprintf("[%s]", strings.Join(schedules, ", "))
+}
+
+// Job management methods for CLI access
+
+// GetJobManager returns the job manager (for CLI access)
+func (s *Scheduler) GetJobManager() *job.Manager {
+	return s.jobManager
+}
+
+// GetStandaloneJobManager returns the standalone job manager (for CLI access)
+func (s *Scheduler) GetStandaloneJobManager() *job.StandaloneJobManager {
+	return s.standaloneJobManager
+}
+
+// ManualExecuteJob executes a job immediately via CLI
+func (s *Scheduler) ManualExecuteJob(workspaceID, jobName string) error {
+	if s.jobManager == nil {
+		// Initialize job manager if not already done
+		if err := s.initJobManager(); err != nil {
+			return fmt.Errorf("failed to initialize job manager: %w", err)
+		}
+	}
+
+	// Get the workspace
+	workspace := s.GetWorkspace(workspaceID)
+	if workspace == nil {
+		return fmt.Errorf("workspace '%s' not found", workspaceID)
+	}
+
+	// Find the job configuration
+	jobConfigs := workspace.Config.GetJobConfigs()
+	var configMap map[string]interface{}
+	var hasJob bool
+
+	for _, jc := range jobConfigs {
+		if jc.Name == jobName {
+			// Convert to interface{} format expected by job manager
+			configMap = map[string]interface{}{
+				"name":        jc.Name,
+				"type":        jc.Type,
+				"schedule":    jc.Schedule,
+				"script":      jc.Script,
+				"command":     jc.Command,
+				"template":    jc.Template,
+				"environment": jc.Environment,
+				"working_dir": jc.WorkingDir,
+				"timeout":     jc.Timeout,
+				"enabled":     jc.Enabled,
+				"description": jc.Description,
+			}
+			hasJob = true
+			break
+		}
+	}
+
+	if !hasJob {
+		return fmt.Errorf("job '%s' not found in workspace '%s'", jobName, workspaceID)
+	}
+
+	return s.jobManager.ManualExecuteJob(workspaceID, jobName, configMap)
+}
+
+// KillJob kills a running job
+func (s *Scheduler) KillJob(workspaceID, jobName string) error {
+	if s.jobManager == nil {
+		return fmt.Errorf("job manager not initialized")
+	}
+
+	return s.jobManager.KillJob(workspaceID, jobName)
+}
+
+// GetJobStates returns all job states for a workspace
+func (s *Scheduler) GetJobStates(workspaceID string) map[string]*job.JobState {
+	if s.jobManager == nil {
+		return make(map[string]*job.JobState)
+	}
+
+	return s.jobManager.GetAllJobStates(workspaceID)
+}
+
+// GetJobState returns the state of a specific job
+func (s *Scheduler) GetJobState(workspaceID, jobName string) *job.JobState {
+	if s.jobManager == nil {
+		return nil
+	}
+
+	return s.jobManager.GetJobState(workspaceID, jobName)
+}
+
+// initJobManager initializes the job manager if not already done
+func (s *Scheduler) initJobManager() error {
+	if s.jobManager != nil {
+		return nil
+	}
+
+	// Initialize OpenTofu client if needed
+	if s.client == nil {
+		client, err := opentofu.New()
+		if err != nil {
+			return fmt.Errorf("failed to initialize OpenTofu client: %w", err)
+		}
+		s.client = client
+	}
+
+	// Initialize job manager
+	stateDir := getStateDir()
+	s.jobManager = job.NewManager(stateDir, s.client, s.templateManager)
+
+	// Initialize standalone job manager
+	jobsDir := filepath.Join(s.configDir, "jobs")
+	s.standaloneJobManager = job.NewStandaloneJobManager(jobsDir, stateDir, s.jobManager)
+
+	// Load job state
+	if err := s.jobManager.LoadState(); err != nil {
+		return fmt.Errorf("failed to load job state: %w", err)
+	}
+
+	return nil
 }

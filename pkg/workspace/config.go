@@ -15,7 +15,24 @@ type Config struct {
 	DeploySchedule  interface{}                `json:"deploy_schedule"`
 	DestroySchedule interface{}                `json:"destroy_schedule"`
 	ModeSchedules   map[string]interface{}     `json:"mode_schedules,omitempty"`
+	Jobs            []JobConfig                `json:"jobs,omitempty"`
 	Description     string                     `json:"description"`
+}
+
+// JobConfig represents a job configuration in the workspace
+// This avoids circular imports by not depending on the job package
+type JobConfig struct {
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`          // "script", "command", "template"
+	Schedule    interface{}       `json:"schedule"`      // String or []string for CRON expressions
+	Script      string            `json:"script,omitempty"`
+	Command     string            `json:"command,omitempty"`
+	Template    string            `json:"template,omitempty"`
+	Environment map[string]string `json:"environment,omitempty"`
+	WorkingDir  string            `json:"working_dir,omitempty"`
+	Timeout     string            `json:"timeout,omitempty"`
+	Enabled     bool              `json:"enabled"`
+	Description string            `json:"description,omitempty"`
 }
 
 type Workspace struct {
@@ -450,6 +467,59 @@ func (c *Config) Validate() error {
 			if _, err := normalizeScheduleField(schedule); err != nil {
 				return fmt.Errorf("invalid schedule for mode '%s': %w", mode, err)
 			}
+		}
+	}
+
+	// Validate jobs
+	for i, jobConfig := range c.Jobs {
+		if err := validateJobConfig(jobConfig); err != nil {
+			return fmt.Errorf("job %d (%s) validation failed: %w", i, jobConfig.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// GetJobConfigs returns all job configurations defined in this workspace
+func (c *Config) GetJobConfigs() []JobConfig {
+	return c.Jobs
+}
+
+// validateJobConfig validates a job configuration
+func validateJobConfig(j JobConfig) error {
+	if j.Name == "" {
+		return fmt.Errorf("job name is required")
+	}
+
+	// Validate job type and required fields
+	switch j.Type {
+	case "script":
+		if j.Script == "" {
+			return fmt.Errorf("script content is required for script jobs")
+		}
+	case "command":
+		if j.Command == "" {
+			return fmt.Errorf("command is required for command jobs")
+		}
+	case "template":
+		if j.Template == "" {
+			return fmt.Errorf("template name is required for template jobs")
+		}
+	default:
+		return fmt.Errorf("invalid job type: %s (must be script, command, or template)", j.Type)
+	}
+
+	// Validate schedule if provided
+	if j.Schedule != nil {
+		if _, err := normalizeScheduleField(j.Schedule); err != nil {
+			return fmt.Errorf("invalid schedule: %w", err)
+		}
+	}
+
+	// Validate timeout if provided
+	if j.Timeout != "" {
+		if _, err := time.ParseDuration(j.Timeout); err != nil {
+			return fmt.Errorf("invalid timeout duration '%s': %w", j.Timeout, err)
 		}
 	}
 

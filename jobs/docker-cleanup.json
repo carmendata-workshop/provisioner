@@ -1,0 +1,11 @@
+{
+  "name": "docker-cleanup",
+  "type": "command",
+  "schedule": "0 4 * * 1",
+  "command": "docker system prune -f && docker volume prune -f",
+  "working_dir": "/",
+  "timeout": "20m",
+  "enabled": false,
+  "description": "Weekly Docker cleanup to free up space (disabled by default)",
+  "tags": ["docker", "cleanup", "maintenance"]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "system-health",
+  "type": "script",
+  "schedule": ["0 */6 * * *", "0 0 * * *"],
+  "script": "#!/bin/bash\necho \"=== Disk Usage ===\"\ndf -h\necho \"\n=== Memory Usage ===\"\nfree -h\necho \"\n=== System Uptime ===\"\nuptime\necho \"Health check completed\"",
+  "timeout": "5m",
+  "enabled": true,
+  "description": "System health check every 6 hours and daily",
+  "tags": ["monitoring", "health"]
+}
