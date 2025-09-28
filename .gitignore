@@ -22,6 +22,12 @@ go.work
 /dist/
 *.tar.gz
 *.zip
+# Exclude any binaries built in the project root
+/environmentctl
+/jobctl
+/provisioner
+/templatectl
+/workspacectl
 
 # Cross-compilation binaries (if built in root by mistake)
 provisioner-*
