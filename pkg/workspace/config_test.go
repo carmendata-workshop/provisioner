@@ -404,3 +404,75 @@ func TestConfigJSONSerialization(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadWorkspacesWithInvalidDependencies(t *testing.T) {
+	// Create temporary directory for test workspaces
+	tempDir, err := os.MkdirTemp("", "test-invalid-deps-*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Test workspace with circular dependencies
+	circularWorkspaceDir := filepath.Join(tempDir, "circular-deps")
+	if err := os.MkdirAll(circularWorkspaceDir, 0755); err != nil {
+		t.Fatalf("failed to create workspace directory: %v", err)
+	}
+
+	// Create main.tf
+	mainTFPath := filepath.Join(circularWorkspaceDir, "main.tf")
+	mainTFContent := `resource "null_resource" "main" {}`
+	if err := os.WriteFile(mainTFPath, []byte(mainTFContent), 0644); err != nil {
+		t.Fatalf("failed to write main.tf: %v", err)
+	}
+
+	// Create config with circular dependencies
+	circularConfig := Config{
+		Enabled:     true,
+		Description: "Workspace with circular dependencies",
+		Jobs: []JobConfig{
+			{
+				Name:      "job1",
+				Type:      "script",
+				Script:    "echo 'job1'",
+				DependsOn: []string{"job2"},
+			},
+			{
+				Name:      "job2",
+				Type:      "script",
+				Script:    "echo 'job2'",
+				DependsOn: []string{"job1"},
+			},
+		},
+	}
+
+	configPath := filepath.Join(circularWorkspaceDir, "config.json")
+	configData, err := json.MarshalIndent(circularConfig, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, configData, 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Test that LoadWorkspaces fails for circular dependencies
+	_, err = LoadWorkspaces(tempDir)
+	if err == nil {
+		t.Fatalf("expected LoadWorkspaces to fail due to invalid dependencies")
+	}
+
+	// Check that error message is descriptive
+	errorMsg := err.Error()
+	if !contains(errorMsg, "circular dependency") {
+		t.Errorf("expected error to mention circular dependency, got: %s", errorMsg)
+	}
+
+	t.Logf("Successfully detected invalid dependencies: %v", err)
+}
+
+// Helper function for string containment check
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(s[:len(substr)] == substr ||
+		 (len(s) > len(substr) && contains(s[1:], substr)))
+}
