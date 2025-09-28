@@ -183,9 +183,9 @@ func TestJobScheduleParsing(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:    "invalid schedule type",
+			name:     "invalid schedule type",
 			schedule: 123,
-			wantErr: true,
+			wantErr:  true,
 		},
 	}
 

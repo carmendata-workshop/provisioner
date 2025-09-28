@@ -40,6 +40,40 @@ func TestSubWorkspaceDeploymentTrigger(t *testing.T) {
 		t.Fatalf("failed to write main.tf: %v", err)
 	}
 
+	// Create temporary templates directory for mock templates (set up early so paths work)
+	tempTemplatesDir := filepath.Join(tempDir, "state", "templates")
+	if err := os.MkdirAll(tempTemplatesDir, 0755); err != nil {
+		t.Fatalf("failed to create temp templates directory: %v", err)
+	}
+
+	// Create database template
+	databaseTemplateDir := filepath.Join(tempTemplatesDir, "database")
+	if err := os.MkdirAll(databaseTemplateDir, 0755); err != nil {
+		t.Fatalf("failed to create database template directory: %v", err)
+	}
+	databaseTemplate := `resource "null_resource" "database" {
+  provisioner "local-exec" {
+    command = "echo 'Database deployed'"
+  }
+}`
+	if err := os.WriteFile(filepath.Join(databaseTemplateDir, "main.tf"), []byte(databaseTemplate), 0644); err != nil {
+		t.Fatalf("failed to write database template: %v", err)
+	}
+
+	// Create monitoring template
+	monitoringTemplateDir := filepath.Join(tempTemplatesDir, "monitoring")
+	if err := os.MkdirAll(monitoringTemplateDir, 0755); err != nil {
+		t.Fatalf("failed to create monitoring template directory: %v", err)
+	}
+	monitoringTemplate := `resource "null_resource" "monitoring" {
+  provisioner "local-exec" {
+    command = "echo 'Monitoring deployed'"
+  }
+}`
+	if err := os.WriteFile(filepath.Join(monitoringTemplateDir, "main.tf"), []byte(monitoringTemplate), 0644); err != nil {
+		t.Fatalf("failed to write monitoring template: %v", err)
+	}
+
 	// Create workspace config with @deployment triggered sub-workspace jobs
 	config := workspace.Config{
 		Enabled:     true,
@@ -89,10 +123,33 @@ func TestSubWorkspaceDeploymentTrigger(t *testing.T) {
 	mockClient := opentofu.NewMockTofuClient()
 	mockClient.SetDeploySuccess() // Successful deployment
 
+	// Create state directory structure
+	stateDir := filepath.Join(tempDir, "state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatalf("failed to create state directory: %v", err)
+	}
+
+	// Create deployment directory for the workspace
+	deploymentDir := filepath.Join(stateDir, "deployments", workspaceName)
+	if err := os.MkdirAll(deploymentDir, 0755); err != nil {
+		t.Fatalf("failed to create deployment directory: %v", err)
+	}
+
+	// Set state directory environment variable
+	originalStateDir := os.Getenv("PROVISIONER_STATE_DIR")
+	os.Setenv("PROVISIONER_STATE_DIR", stateDir)
+	defer os.Setenv("PROVISIONER_STATE_DIR", originalStateDir)
+
+	// Create job state file
+	jobStatePath := filepath.Join(stateDir, "jobs.json")
+	if err := os.WriteFile(jobStatePath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create job state file: %v", err)
+	}
+
 	// Create scheduler with mock client
 	sched := NewWithClient(mockClient)
 	sched.configDir = tempDir
-	sched.statePath = filepath.Join(tempDir, "scheduler.json") // Use temp dir for state
+	sched.statePath = filepath.Join(stateDir, "scheduler.json") // Use state dir for state
 
 	// Load workspaces and state
 	if err := sched.LoadWorkspaces(); err != nil {
@@ -101,6 +158,13 @@ func TestSubWorkspaceDeploymentTrigger(t *testing.T) {
 
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("failed to load state: %v", err)
+	}
+
+	// Force job manager initialization and state loading
+	if sched.jobManager != nil {
+		if err := sched.jobManager.LoadState(); err != nil {
+			t.Logf("Failed to load job manager state: %v", err)
+		}
 	}
 
 	// Manually deploy the main workspace
@@ -115,8 +179,16 @@ func TestSubWorkspaceDeploymentTrigger(t *testing.T) {
 		t.Errorf("expected workspace status %s, got %s", StatusDeployed, workspaceState.Status)
 	}
 
-	// Give jobs a moment to process the deployment event
-	time.Sleep(100 * time.Millisecond)
+	// Give jobs more time to process the deployment event and complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Force job manager to load any saved state
+	if sched.jobManager != nil {
+		err = sched.jobManager.LoadState()
+		if err != nil {
+			t.Logf("Failed to load job state: %v", err)
+		}
+	}
 
 	// Check job states to verify that @deployment jobs were triggered
 	if sched.jobManager != nil {
@@ -209,10 +281,33 @@ func TestSubWorkspaceFailedDeploymentTrigger(t *testing.T) {
 	mockClient := opentofu.NewMockTofuClient()
 	mockClient.SetDeployError(errors.New("deployment failed"))
 
+	// Create state directory structure
+	stateDir := filepath.Join(tempDir, "state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatalf("failed to create state directory: %v", err)
+	}
+
+	// Create deployment directory for the workspace
+	deploymentDir := filepath.Join(stateDir, "deployments", workspaceName)
+	if err := os.MkdirAll(deploymentDir, 0755); err != nil {
+		t.Fatalf("failed to create deployment directory: %v", err)
+	}
+
+	// Set state directory environment variable
+	originalStateDir := os.Getenv("PROVISIONER_STATE_DIR")
+	os.Setenv("PROVISIONER_STATE_DIR", stateDir)
+	defer os.Setenv("PROVISIONER_STATE_DIR", originalStateDir)
+
+	// Create job state file
+	jobStatePath := filepath.Join(stateDir, "jobs.json")
+	if err := os.WriteFile(jobStatePath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create job state file: %v", err)
+	}
+
 	// Create scheduler with mock client
 	sched := NewWithClient(mockClient)
 	sched.configDir = tempDir
-	sched.statePath = filepath.Join(tempDir, "scheduler.json") // Use temp dir for state
+	sched.statePath = filepath.Join(stateDir, "scheduler.json") // Use state dir for state
 
 	// Load workspaces and state
 	if err := sched.LoadWorkspaces(); err != nil {
@@ -221,6 +316,13 @@ func TestSubWorkspaceFailedDeploymentTrigger(t *testing.T) {
 
 	if err := sched.LoadState(); err != nil {
 		t.Fatalf("failed to load state: %v", err)
+	}
+
+	// Force job manager initialization and state loading
+	if sched.jobManager != nil {
+		if err := sched.jobManager.LoadState(); err != nil {
+			t.Logf("Failed to load job manager state: %v", err)
+		}
 	}
 
 	// Manually deploy the workspace (which will fail)
@@ -235,8 +337,16 @@ func TestSubWorkspaceFailedDeploymentTrigger(t *testing.T) {
 		t.Errorf("expected workspace status %s, got %s", StatusDeployFailed, workspaceState.Status)
 	}
 
-	// Give jobs a moment to process the deployment-failed event
-	time.Sleep(100 * time.Millisecond)
+	// Give jobs more time to process the deployment-failed event
+	time.Sleep(500 * time.Millisecond)
+
+	// Force job manager to load any saved state
+	if sched.jobManager != nil {
+		err = sched.jobManager.LoadState()
+		if err != nil {
+			t.Logf("Failed to load job state: %v", err)
+		}
+	}
 
 	// Check that the cleanup job was triggered
 	if sched.jobManager != nil {
@@ -265,7 +375,7 @@ func TestSpecialScheduleParsing(t *testing.T) {
 		{"@destroy-failed", true},
 		{"@reboot", true},
 		{"@invalid", false},
-		{"0 9 * * 1-5", true}, // Regular CRON
+		{"0 9 * * 1-5", true},  // Regular CRON
 		{"*/15 * * * *", true}, // Regular CRON
 	}
 

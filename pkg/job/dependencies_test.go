@@ -102,7 +102,7 @@ func TestDependencyResolver_CanExecute(t *testing.T) {
 		t.Errorf("foundation should be able to execute, but got: %s", reason)
 	}
 
-	canExecute, reason = resolver.CanExecute(jobs[1]) // database
+	canExecute, _ = resolver.CanExecute(jobs[1]) // database
 	if canExecute {
 		t.Errorf("database should not be able to execute initially, but it can")
 	}
@@ -115,7 +115,7 @@ func TestDependencyResolver_CanExecute(t *testing.T) {
 		t.Errorf("database should be able to execute after foundation completes, but got: %s", reason)
 	}
 
-	canExecute, reason = resolver.CanExecute(jobs[2]) // app
+	canExecute, _ = resolver.CanExecute(jobs[2]) // app
 	if canExecute {
 		t.Errorf("app should not be able to execute yet (database not complete), but it can")
 	}
@@ -247,8 +247,8 @@ func TestDependencyResolver_FailedDependency(t *testing.T) {
 // Helper functions
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && s[len(s)-len(substr):] == substr ||
-		   len(s) > 0 && (s[:len(substr)] == substr ||
-		   (len(s) > len(substr) && contains(s[1:], substr)))
+		len(s) > 0 && (s[:len(substr)] == substr ||
+			(len(s) > len(substr) && contains(s[1:], substr)))
 }
 
 func getJobNames(jobs []*Job) []string {

@@ -10,21 +10,21 @@ import (
 )
 
 type Config struct {
-	Enabled         bool                       `json:"enabled"`
-	Template        string                     `json:"template,omitempty"`
-	DeploySchedule  interface{}                `json:"deploy_schedule"`
-	DestroySchedule interface{}                `json:"destroy_schedule"`
-	ModeSchedules   map[string]interface{}     `json:"mode_schedules,omitempty"`
-	Jobs            []JobConfig                `json:"jobs,omitempty"`
-	Description     string                     `json:"description"`
+	Enabled         bool                   `json:"enabled"`
+	Template        string                 `json:"template,omitempty"`
+	DeploySchedule  interface{}            `json:"deploy_schedule"`
+	DestroySchedule interface{}            `json:"destroy_schedule"`
+	ModeSchedules   map[string]interface{} `json:"mode_schedules,omitempty"`
+	Jobs            []JobConfig            `json:"jobs,omitempty"`
+	Description     string                 `json:"description"`
 }
 
 // JobConfig represents a job configuration in the workspace
 // This avoids circular imports by not depending on the job package
 type JobConfig struct {
 	Name        string            `json:"name"`
-	Type        string            `json:"type"`          // "script", "command", "template"
-	Schedule    interface{}       `json:"schedule"`      // String or []string for CRON expressions
+	Type        string            `json:"type"`     // "script", "command", "template"
+	Schedule    interface{}       `json:"schedule"` // String or []string for CRON expressions
 	Script      string            `json:"script,omitempty"`
 	Command     string            `json:"command,omitempty"`
 	Template    string            `json:"template,omitempty"`
@@ -450,7 +450,7 @@ func RemoveWorkspace(name string) error {
 
 // Validate validates the workspace configuration
 func (c *Config) Validate() error {
-	hasModeSchedules := c.ModeSchedules != nil && len(c.ModeSchedules) > 0
+	hasModeSchedules := len(c.ModeSchedules) > 0
 	hasDeploySchedule := c.DeploySchedule != nil
 
 	// Mutually exclusive validation

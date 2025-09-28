@@ -7,19 +7,19 @@ import (
 
 // DependencyResolver handles job dependency checking and execution ordering
 type DependencyResolver struct {
-	jobs         []*Job
-	jobsByName   map[string]*Job
+	jobs          []*Job
+	jobsByName    map[string]*Job
 	completedJobs map[string]bool
-	failedJobs   map[string]bool
+	failedJobs    map[string]bool
 }
 
 // NewDependencyResolver creates a new dependency resolver
 func NewDependencyResolver(jobs []*Job) *DependencyResolver {
 	resolver := &DependencyResolver{
-		jobs:         jobs,
-		jobsByName:   make(map[string]*Job),
+		jobs:          jobs,
+		jobsByName:    make(map[string]*Job),
 		completedJobs: make(map[string]bool),
-		failedJobs:   make(map[string]bool),
+		failedJobs:    make(map[string]bool),
 	}
 
 	// Build job name index

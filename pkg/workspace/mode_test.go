@@ -97,10 +97,10 @@ func TestConfigValidate(t *testing.T) {
 
 func TestGetModeSchedules(t *testing.T) {
 	tests := []struct {
-		name            string
-		config          Config
-		expectedModes   map[string][]string
-		expectError     bool
+		name          string
+		config        Config
+		expectedModes map[string][]string
+		expectError   bool
 	}{
 		{
 			name: "single string schedules",
@@ -120,7 +120,7 @@ func TestGetModeSchedules(t *testing.T) {
 			name: "array schedules",
 			config: Config{
 				ModeSchedules: map[string]interface{}{
-					"busy": []string{"0 8 * * 1-5", "0 12 * * 1-5"},
+					"busy":  []string{"0 8 * * 1-5", "0 12 * * 1-5"},
 					"quiet": "0 6 * * 1-5",
 				},
 			},

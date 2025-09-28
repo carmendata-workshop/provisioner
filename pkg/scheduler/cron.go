@@ -9,11 +9,11 @@ import (
 )
 
 type CronSchedule struct {
-	Minute []int // Support ranges and lists
-	Hour   []int
-	Day    []int
-	Month  []int
-	DOW    []int // Day of week
+	Minute  []int // Support ranges and lists
+	Hour    []int
+	Day     []int
+	Month   []int
+	DOW     []int  // Day of week
 	Special string // Special schedules like "@deployment", "@reboot"
 }
 
@@ -69,9 +69,9 @@ func parseSpecialSchedule(cronExpr string) (*CronSchedule, error) {
 	validSpecials := map[string]bool{
 		"@deployment":        true,
 		"@deployment-failed": true,
-		"@destroy":          true,
-		"@destroy-failed":   true,
-		"@reboot":           true,
+		"@destroy":           true,
+		"@destroy-failed":    true,
+		"@reboot":            true,
 	}
 
 	if !validSpecials[cronExpr] {
@@ -189,4 +189,3 @@ func (c *CronSchedule) IsSpecialSchedule() bool {
 func (c *CronSchedule) GetSpecialSchedule() string {
 	return c.Special
 }
-

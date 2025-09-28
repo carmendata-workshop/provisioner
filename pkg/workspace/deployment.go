@@ -11,10 +11,10 @@ import (
 // DeploymentMetadata tracks template information for workspace deployments
 type DeploymentMetadata struct {
 	WorkspaceName string    `json:"workspace_name"`
-	TemplateName    string    `json:"template_name,omitempty"`
-	TemplateHash    string    `json:"template_hash,omitempty"`
-	LastUpdated     time.Time `json:"last_updated"`
-	CreatedAt       time.Time `json:"created_at"`
+	TemplateName  string    `json:"template_name,omitempty"`
+	TemplateHash  string    `json:"template_hash,omitempty"`
+	LastUpdated   time.Time `json:"last_updated"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // GetDeploymentMetadataPath returns the path to deployment metadata file
@@ -30,8 +30,8 @@ func LoadDeploymentMetadata(stateDir, wsName string) (*DeploymentMetadata, error
 	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
 		return &DeploymentMetadata{
 			WorkspaceName: wsName,
-			CreatedAt:       time.Now(),
-			LastUpdated:     time.Now(),
+			CreatedAt:     time.Now(),
+			LastUpdated:   time.Now(),
 		}, nil
 	}
 

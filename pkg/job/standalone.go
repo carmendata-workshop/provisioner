@@ -12,8 +12,8 @@ import (
 // StandaloneJobConfig represents a job configuration file
 type StandaloneJobConfig struct {
 	Name        string            `json:"name"`
-	Type        string            `json:"type"`          // "script", "command", "template"
-	Schedule    interface{}       `json:"schedule"`      // String or []string for CRON expressions
+	Type        string            `json:"type"`     // "script", "command", "template"
+	Schedule    interface{}       `json:"schedule"` // String or []string for CRON expressions
 	Script      string            `json:"script,omitempty"`
 	Command     string            `json:"command,omitempty"`
 	Template    string            `json:"template,omitempty"`
@@ -117,9 +117,9 @@ func (sjc *StandaloneJobConfig) ToJob() (*Job, error) {
 
 // StandaloneJobManager handles standalone jobs that aren't tied to workspaces
 type StandaloneJobManager struct {
-	jobsDir    string
-	stateDir   string
-	manager    *Manager
+	jobsDir  string
+	stateDir string
+	manager  *Manager
 }
 
 // NewStandaloneJobManager creates a new standalone job manager

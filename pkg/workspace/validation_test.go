@@ -13,8 +13,8 @@ func TestValidateJobDependencies(t *testing.T) {
 		errorContains string
 	}{
 		{
-			name: "no jobs",
-			jobs: []JobConfig{},
+			name:        "no jobs",
+			jobs:        []JobConfig{},
 			expectError: false,
 		},
 		{
@@ -49,7 +49,7 @@ func TestValidateJobDependencies(t *testing.T) {
 				{Name: "job1", Type: "script", Script: "echo 'job1'", DependsOn: []string{"job2"}},
 				{Name: "job2", Type: "script", Script: "echo 'job2'", DependsOn: []string{"job1"}},
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "circular dependency",
 		},
 		{
@@ -59,7 +59,7 @@ func TestValidateJobDependencies(t *testing.T) {
 				{Name: "job2", Type: "script", Script: "echo 'job2'", DependsOn: []string{"job3"}},
 				{Name: "job3", Type: "script", Script: "echo 'job3'", DependsOn: []string{"job1"}},
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "circular dependency",
 		},
 		{
@@ -67,7 +67,7 @@ func TestValidateJobDependencies(t *testing.T) {
 			jobs: []JobConfig{
 				{Name: "job1", Type: "script", Script: "echo 'job1'", DependsOn: []string{"nonexistent"}},
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "depends on non-existent job",
 		},
 		{
@@ -75,7 +75,7 @@ func TestValidateJobDependencies(t *testing.T) {
 			jobs: []JobConfig{
 				{Name: "job1", Type: "script", Script: "echo 'job1'", DependsOn: []string{"missing1", "missing2"}},
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "depends on non-existent job",
 		},
 		{
@@ -83,7 +83,7 @@ func TestValidateJobDependencies(t *testing.T) {
 			jobs: []JobConfig{
 				{Name: "job1", Type: "script", Script: "echo 'job1'", DependsOn: []string{"job1"}},
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "circular dependency",
 		},
 		{

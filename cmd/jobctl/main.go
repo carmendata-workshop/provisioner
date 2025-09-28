@@ -471,8 +471,6 @@ func runWorkspaceKillCommand(workspaceName, jobName string) error {
 // Status display functions
 
 func showStandaloneJobStatus(standaloneJobManager *job.StandaloneJobManager, jobName string) error {
-	const standaloneWorkspaceID = "_standalone_"
-
 	jobStates := standaloneJobManager.GetStandaloneJobStates()
 	jobState, exists := jobStates[jobName]
 	if !exists {

@@ -373,4 +373,3 @@ func writeConfigFile(path string, config workspace.Config) error {
 
 	return os.WriteFile(path, []byte(data), 0644)
 }
-

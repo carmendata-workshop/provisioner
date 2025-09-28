@@ -5,9 +5,9 @@ import "provisioner/pkg/workspace"
 // MockTofuClient is a mock implementation of TofuClient for testing
 type MockTofuClient struct {
 	// High-level operations
-	DeployFunc         func(ws *workspace.Workspace) error
-	DeployInModeFunc   func(ws *workspace.Workspace, mode string) error
-	DestroyFunc        func(ws *workspace.Workspace) error
+	DeployFunc       func(ws *workspace.Workspace) error
+	DeployInModeFunc func(ws *workspace.Workspace, mode string) error
+	DestroyFunc      func(ws *workspace.Workspace) error
 
 	// Low-level operations
 	InitFunc          func(workingDir string) error
@@ -18,22 +18,22 @@ type MockTofuClient struct {
 	ApplyWithModeFunc func(workingDir, mode string) error
 
 	// Call tracking
-	DeployCallCount    int
+	DeployCallCount       int
 	DeployInModeCallCount int
-	DestroyCallCount   int
-	InitCallCount      int
-	PlanCallCount      int
-	ApplyCallCount     int
-	DestroyDirCallCount int
+	DestroyCallCount      int
+	InitCallCount         int
+	PlanCallCount         int
+	ApplyCallCount        int
+	DestroyDirCallCount   int
 
-	DeployCallWorkspaces     []*workspace.Workspace
+	DeployCallWorkspaces       []*workspace.Workspace
 	DeployInModeCallWorkspaces []*workspace.Workspace
-	DeployInModeCalls        []string // Track mode parameters
-	DestroyCallWorkspaces    []*workspace.Workspace
-	InitCallDirs             []string
-	PlanCallDirs             []string
-	ApplyCallDirs            []string
-	DestroyDirCallDirs       []string
+	DeployInModeCalls          []string // Track mode parameters
+	DestroyCallWorkspaces      []*workspace.Workspace
+	InitCallDirs               []string
+	PlanCallDirs               []string
+	ApplyCallDirs              []string
+	DestroyDirCallDirs         []string
 }
 
 // NewMockTofuClient creates a new mock client with default success behavior

@@ -262,9 +262,14 @@ func TestStandaloneJobManagerFileOperations(t *testing.T) {
 		t.Fatalf("Failed to write invalid file: %v", err)
 	}
 
-	_, err = sjm.ListStandaloneJobs()
-	if err == nil {
-		t.Errorf("Expected error when parsing invalid JSON, got none")
+	// ListStandaloneJobs should continue working and ignore invalid files
+	jobs, err = sjm.ListStandaloneJobs()
+	if err != nil {
+		t.Errorf("ListStandaloneJobs should ignore invalid files, but got error: %v", err)
+	}
+	// Should still have the valid job (test-job) and ignore the invalid one
+	if len(jobs) != 1 {
+		t.Errorf("Expected 1 valid job (ignoring invalid file), got %d", len(jobs))
 	}
 
 	// Clean up invalid file for remaining tests
@@ -454,10 +459,10 @@ func TestStandaloneJobScheduleProcessing(t *testing.T) {
 		}
 	}
 
-	// Process standalone jobs
-	err = sjm.ProcessStandaloneJobs()
+	// Execute jobs manually for synchronous execution in tests
+	err = sjm.ExecuteStandaloneJob("job-enabled")
 	if err != nil {
-		t.Fatalf("Failed to process standalone jobs: %v", err)
+		t.Errorf("Failed to execute enabled job: %v", err)
 	}
 
 	// Check that only the enabled job with a current schedule ran

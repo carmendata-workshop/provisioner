@@ -19,12 +19,12 @@ const (
 type JobStatus string
 
 const (
-	JobStatusPending   JobStatus = "pending"
-	JobStatusRunning   JobStatus = "running"
-	JobStatusSuccess   JobStatus = "success"
-	JobStatusFailed    JobStatus = "failed"
-	JobStatusTimeout   JobStatus = "timeout"
-	JobStatusDisabled  JobStatus = "disabled"
+	JobStatusPending  JobStatus = "pending"
+	JobStatusRunning  JobStatus = "running"
+	JobStatusSuccess  JobStatus = "success"
+	JobStatusFailed   JobStatus = "failed"
+	JobStatusTimeout  JobStatus = "timeout"
+	JobStatusDisabled JobStatus = "disabled"
 )
 
 // Job represents a scheduled job within a workspace
@@ -32,7 +32,7 @@ type Job struct {
 	Name        string            `json:"name"`
 	WorkspaceID string            `json:"workspace_id"`
 	JobType     JobType           `json:"type"`
-	Schedule    interface{}       `json:"schedule"`    // String or []string for CRON expressions
+	Schedule    interface{}       `json:"schedule"`              // String or []string for CRON expressions
 	Script      string            `json:"script,omitempty"`      // Shell script content
 	Command     string            `json:"command,omitempty"`     // Single command to execute
 	Template    string            `json:"template,omitempty"`    // Template name for template jobs
@@ -41,38 +41,38 @@ type Job struct {
 	Timeout     string            `json:"timeout,omitempty"`     // Timeout duration (e.g., "30m", "1h")
 	Enabled     bool              `json:"enabled"`
 	Description string            `json:"description,omitempty"`
-	DependsOn   []string          `json:"depends_on,omitempty"`  // Job dependencies
+	DependsOn   []string          `json:"depends_on,omitempty"` // Job dependencies
 }
 
 // JobExecution represents a single execution instance of a job
 type JobExecution struct {
-	JobName     string    `json:"job_name"`
-	WorkspaceID string    `json:"workspace_id"`
-	Status      JobStatus `json:"status"`
-	StartTime   time.Time `json:"start_time"`
-	EndTime     *time.Time `json:"end_time,omitempty"`
+	JobName     string        `json:"job_name"`
+	WorkspaceID string        `json:"workspace_id"`
+	Status      JobStatus     `json:"status"`
+	StartTime   time.Time     `json:"start_time"`
+	EndTime     *time.Time    `json:"end_time,omitempty"`
 	Duration    time.Duration `json:"duration"`
-	ExitCode    int       `json:"exit_code"`
-	Output      string    `json:"output,omitempty"`
-	Error       string    `json:"error,omitempty"`
-	PID         int       `json:"pid,omitempty"`
+	ExitCode    int           `json:"exit_code"`
+	Output      string        `json:"output,omitempty"`
+	Error       string        `json:"error,omitempty"`
+	PID         int           `json:"pid,omitempty"`
 }
 
 // JobState tracks the persistent state of a job across scheduler restarts
 type JobState struct {
-	Name               string        `json:"name"`
-	WorkspaceID        string        `json:"workspace_id"`
-	Status             JobStatus     `json:"status"`
-	LastRun            *time.Time    `json:"last_run,omitempty"`
-	LastSuccess        *time.Time    `json:"last_success,omitempty"`
-	LastFailure        *time.Time    `json:"last_failure,omitempty"`
-	LastError          string        `json:"last_error,omitempty"`
-	LastExitCode       int           `json:"last_exit_code"`
-	RunCount           int           `json:"run_count"`
-	SuccessCount       int           `json:"success_count"`
-	FailureCount       int           `json:"failure_count"`
-	LastConfigModified *time.Time    `json:"last_config_modified,omitempty"`
-	NextRun            *time.Time    `json:"next_run,omitempty"`
+	Name               string     `json:"name"`
+	WorkspaceID        string     `json:"workspace_id"`
+	Status             JobStatus  `json:"status"`
+	LastRun            *time.Time `json:"last_run,omitempty"`
+	LastSuccess        *time.Time `json:"last_success,omitempty"`
+	LastFailure        *time.Time `json:"last_failure,omitempty"`
+	LastError          string     `json:"last_error,omitempty"`
+	LastExitCode       int        `json:"last_exit_code"`
+	RunCount           int        `json:"run_count"`
+	SuccessCount       int        `json:"success_count"`
+	FailureCount       int        `json:"failure_count"`
+	LastConfigModified *time.Time `json:"last_config_modified,omitempty"`
+	NextRun            *time.Time `json:"next_run,omitempty"`
 }
 
 // GetSchedules returns job schedules as a slice, handling both string and []string formats

@@ -16,17 +16,17 @@ import (
 )
 
 type Scheduler struct {
-	workspaces            []workspace.Workspace
-	state                 *State
-	client                opentofu.TofuClient
-	jobManager            *job.Manager
-	standaloneJobManager  *job.StandaloneJobManager
-	templateManager       *template.Manager
-	statePath             string
-	stopChan              chan bool
-	lastConfigCheck       time.Time
-	configDir             string
-	quietMode             bool
+	workspaces           []workspace.Workspace
+	state                *State
+	client               opentofu.TofuClient
+	jobManager           *job.Manager
+	standaloneJobManager *job.StandaloneJobManager
+	templateManager      *template.Manager
+	statePath            string
+	stopChan             chan bool
+	lastConfigCheck      time.Time
+	configDir            string
+	quietMode            bool
 }
 
 func New() *Scheduler {

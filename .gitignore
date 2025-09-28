@@ -182,5 +182,8 @@ pids/
 # Application specific
 # Add any app-specific files here
 
+# Accidental command artifacts (version specifiers treated as filenames)
+=*
+
 # Generated install script (build artifact, not source)
 scripts/install.sh
