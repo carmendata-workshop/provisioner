@@ -1335,6 +1335,7 @@ func (s *Scheduler) triggerJobEvent(workspaceID string, event *DeploymentEvent) 
 			"timeout":     jobConfig.Timeout,
 			"enabled":     jobConfig.Enabled,
 			"description": jobConfig.Description,
+			"depends_on":  jobConfig.DependsOn,
 		}
 	}
 

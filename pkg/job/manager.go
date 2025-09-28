@@ -236,6 +236,60 @@ func (m *Manager) ListJobs(workspaceID string) map[string]*JobState {
 	return m.stateManager.GetAllJobStates(workspaceID)
 }
 
+// updateResolverWithCurrentStates updates the dependency resolver with current job completion states
+func (m *Manager) updateResolverWithCurrentStates(workspaceID string, resolver *DependencyResolver) {
+	jobStates := m.stateManager.GetAllJobStates(workspaceID)
+
+	for jobName, state := range jobStates {
+		if state == nil {
+			continue
+		}
+
+		switch state.Status {
+		case JobStatusSuccess:
+			resolver.SetJobCompleted(jobName)
+		case JobStatusFailed, JobStatusTimeout:
+			resolver.SetJobFailed(jobName)
+		}
+	}
+}
+
+// ExecuteJobWithDependencyTracking executes a job and handles dependency completion tracking
+func (m *Manager) ExecuteJobWithDependencyTracking(job *Job, resolver *DependencyResolver) {
+	// Execute the job asynchronously
+	go func() {
+		execution := m.ExecuteJob(job)
+
+		// Update resolver based on execution result
+		if execution.Status == JobStatusSuccess {
+			resolver.SetJobCompleted(job.Name)
+			logging.LogWorkspace(job.WorkspaceID, "JOB %s: Completed successfully, checking dependent jobs", job.Name)
+		} else {
+			resolver.SetJobFailed(job.Name)
+			logging.LogWorkspace(job.WorkspaceID, "JOB %s: Failed, dependent jobs will not run", job.Name)
+		}
+
+		// Check if any dependent jobs can now run
+		m.triggerDependentJobs(job.WorkspaceID, resolver)
+	}()
+}
+
+// triggerDependentJobs checks and triggers any jobs that are now ready to run
+func (m *Manager) triggerDependentJobs(workspaceID string, resolver *DependencyResolver) {
+	readyJobs := resolver.GetReadyJobs()
+
+	for _, job := range readyJobs {
+		// Check if job is already running or completed
+		jobState := m.stateManager.GetJobState(workspaceID, job.Name)
+		if jobState != nil && (jobState.Status == JobStatusRunning || jobState.Status == JobStatusSuccess) {
+			continue
+		}
+
+		logging.LogWorkspace(workspaceID, "JOB %s: Dependencies satisfied, triggering execution", job.Name)
+		m.ExecuteJobWithDependencyTracking(job, resolver)
+	}
+}
+
 // ShouldRunJobForEvent determines if a job should run based on a deployment event
 func (m *Manager) ShouldRunJobForEvent(job *Job, event DeploymentEvent) bool {
 	jobState := m.stateManager.GetJobState(job.WorkspaceID, job.Name)
@@ -275,7 +329,7 @@ func (m *Manager) ShouldRunJobForEvent(job *Job, event DeploymentEvent) bool {
 func (m *Manager) ProcessWorkspaceJobsForEvent(workspaceID string, jobConfigs []interface{}, event DeploymentEvent) {
 	// Convert job configs to job objects
 	activeJobs := make([]string, 0, len(jobConfigs))
-	jobs := make([]*Job, 0, len(jobConfigs))
+	eventTriggeredJobs := make([]*Job, 0)
 
 	for _, configInterface := range jobConfigs {
 		job, err := JobConfigToJob(workspaceID, configInterface)
@@ -285,17 +339,37 @@ func (m *Manager) ProcessWorkspaceJobsForEvent(workspaceID string, jobConfigs []
 		}
 
 		activeJobs = append(activeJobs, job.Name)
-		jobs = append(jobs, job)
+
+		// Only include jobs that should run for this event
+		if m.ShouldRunJobForEvent(job, event) {
+			eventTriggeredJobs = append(eventTriggeredJobs, job)
+		}
 	}
 
 	// Cleanup states for jobs that no longer exist
 	m.stateManager.CleanupJobStates(workspaceID, activeJobs)
 
-	// Check each job to see if it should run for this event
-	for _, job := range jobs {
-		if m.ShouldRunJobForEvent(job, event) {
-			logging.LogWorkspace(workspaceID, "JOB %s: Triggering execution due to event: %s", job.Name, event.GetType())
-			m.ExecuteJobAsync(job)
-		}
+	// If no jobs to run, return early
+	if len(eventTriggeredJobs) == 0 {
+		return
+	}
+
+	// Create dependency resolver
+	resolver := NewDependencyResolver(eventTriggeredJobs)
+
+	// Validate dependencies
+	if err := resolver.ValidateDependencies(); err != nil {
+		logging.LogWorkspace(workspaceID, "Job dependency validation failed: %v", err)
+		return
+	}
+
+	// Set current job states in resolver
+	m.updateResolverWithCurrentStates(workspaceID, resolver)
+
+	// Execute jobs that are ready (no dependencies or dependencies satisfied)
+	readyJobs := resolver.GetReadyJobs()
+	for _, job := range readyJobs {
+		logging.LogWorkspace(workspaceID, "JOB %s: Triggering execution due to event: %s", job.Name, event.GetType())
+		m.ExecuteJobWithDependencyTracking(job, resolver)
 	}
 }

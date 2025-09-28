@@ -6,22 +6,53 @@
   "description": "Demo of sub-workspace deployment using @deployment triggers",
   "jobs": [
     {
+      "name": "network-foundation",
+      "type": "template",
+      "schedule": "@deployment",
+      "template": "vpc-subnets",
+      "timeout": "10m",
+      "enabled": true,
+      "description": "Deploy network foundation (VPC, subnets)"
+    },
+    {
       "name": "database-cluster",
       "type": "template",
       "schedule": "@deployment",
       "template": "postgres-cluster",
+      "depends_on": ["network-foundation"],
       "timeout": "20m",
       "enabled": true,
-      "description": "Deploy PostgreSQL cluster after main infrastructure"
+      "description": "Deploy PostgreSQL cluster after network foundation"
+    },
+    {
+      "name": "cache-cluster",
+      "type": "template",
+      "schedule": "@deployment",
+      "template": "redis-cluster",
+      "depends_on": ["network-foundation"],
+      "timeout": "15m",
+      "enabled": true,
+      "description": "Deploy Redis cache cluster after network foundation"
+    },
+    {
+      "name": "application-stack",
+      "type": "template",
+      "schedule": "@deployment",
+      "template": "web-application",
+      "depends_on": ["database-cluster", "cache-cluster"],
+      "timeout": "15m",
+      "enabled": true,
+      "description": "Deploy application stack after database and cache"
     },
     {
       "name": "monitoring-stack",
       "type": "template",
       "schedule": "@deployment",
       "template": "prometheus-grafana",
-      "timeout": "15m",
+      "depends_on": ["application-stack"],
+      "timeout": "10m",
       "enabled": true,
-      "description": "Deploy monitoring stack after main infrastructure"
+      "description": "Deploy monitoring stack after application is ready"
     },
     {
       "name": "setup-dns",

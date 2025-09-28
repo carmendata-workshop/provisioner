@@ -41,6 +41,7 @@ type Job struct {
 	Timeout     string            `json:"timeout,omitempty"`     // Timeout duration (e.g., "30m", "1h")
 	Enabled     bool              `json:"enabled"`
 	Description string            `json:"description,omitempty"`
+	DependsOn   []string          `json:"depends_on,omitempty"`  // Job dependencies
 }
 
 // JobExecution represents a single execution instance of a job
@@ -235,6 +236,16 @@ func JobConfigToJob(workspaceID string, config interface{}) (*Job, error) {
 		for key, value := range env {
 			if strValue, ok := value.(string); ok {
 				job.Environment[key] = strValue
+			}
+		}
+	}
+
+	// Extract dependencies
+	if deps, ok := configMap["depends_on"].([]interface{}); ok {
+		job.DependsOn = make([]string, len(deps))
+		for i, dep := range deps {
+			if strDep, ok := dep.(string); ok {
+				job.DependsOn[i] = strDep
 			}
 		}
 	}

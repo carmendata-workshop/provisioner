@@ -33,6 +33,7 @@ type JobConfig struct {
 	Timeout     string            `json:"timeout,omitempty"`
 	Enabled     bool              `json:"enabled"`
 	Description string            `json:"description,omitempty"`
+	DependsOn   []string          `json:"depends_on,omitempty"` // Job dependencies
 }
 
 type Workspace struct {
@@ -83,6 +84,11 @@ func LoadWorkspaces(workspacesDir string) ([]Workspace, error) {
 				fmt.Printf("Warning: workspace %s references template '%s' but template not found\n", entry.Name(), ws.Config.Template)
 			}
 			continue
+		}
+
+		// Validate job dependencies for circular dependencies
+		if err := ValidateJobDependencies(ws.Config.Jobs); err != nil {
+			return nil, fmt.Errorf("workspace %s has invalid job dependencies: %w", entry.Name(), err)
 		}
 
 		// Load all workspaces (enabled check will be done during scheduling)
@@ -596,6 +602,70 @@ func ValidateWorkspace(name string) error {
 		templatePath := filepath.Join(templatesDir, config.Template)
 		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 			return fmt.Errorf("referenced template '%s' does not exist", config.Template)
+		}
+	}
+
+	return nil
+}
+
+// ValidateJobDependencies checks for circular dependencies in job configurations
+func ValidateJobDependencies(jobs []JobConfig) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	// Build a map of job names to their dependencies
+	jobsByName := make(map[string]*JobConfig)
+	for i, job := range jobs {
+		jobsByName[job.Name] = &jobs[i]
+	}
+
+	// Check for missing dependencies
+	for _, job := range jobs {
+		for _, depName := range job.DependsOn {
+			if _, exists := jobsByName[depName]; !exists {
+				return fmt.Errorf("job '%s' depends on non-existent job '%s'", job.Name, depName)
+			}
+		}
+	}
+
+	// Check for circular dependencies using DFS
+	// States: 0 = unvisited, 1 = visiting, 2 = visited
+	state := make(map[string]int)
+
+	var dfs func(jobName string) error
+	dfs = func(jobName string) error {
+		if state[jobName] == 1 {
+			return fmt.Errorf("circular dependency detected involving job '%s'", jobName)
+		}
+		if state[jobName] == 2 {
+			return nil // Already processed
+		}
+
+		state[jobName] = 1 // Mark as visiting
+
+		job, exists := jobsByName[jobName]
+		if !exists {
+			return fmt.Errorf("job '%s' not found", jobName)
+		}
+
+		// Visit dependencies
+		for _, depName := range job.DependsOn {
+			if err := dfs(depName); err != nil {
+				return err
+			}
+		}
+
+		state[jobName] = 2 // Mark as visited
+		return nil
+	}
+
+	// Check all jobs for circular dependencies
+	for jobName := range jobsByName {
+		if state[jobName] == 0 {
+			if err := dfs(jobName); err != nil {
+				return err
+			}
 		}
 	}
 
