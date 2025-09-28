@@ -1,6 +1,6 @@
 #!/bin/bash
 # .devcontainer/setup.sh
-# Development environment setup script for iacDNS project
+# Development environment setup script for provisioner project
 
 set -euo pipefail
 
@@ -33,7 +33,7 @@ if [[ $EUID -eq 0 ]]; then
    exit 1
 fi
 
-log "Starting iacDNS development environment setup..."
+log "Starting provisioner development environment setup..."
 
 # Install OpenTofu
 install_opentofu() {
@@ -91,7 +91,7 @@ install_ansible() {
 
     # Create virtual environment for project dependencies
     # Note: Python should already be installed via devcontainer features
-    local venv_dir="$HOME/.venv/iacDNS"
+    local venv_dir="$HOME/.venv/provisioner"
     if [[ ! -d "$venv_dir" ]]; then
         log "Creating Python virtual environment at $venv_dir"
         python3 -m venv "$venv_dir"
@@ -104,8 +104,8 @@ install_ansible() {
     pip install --upgrade pip
 
     # Install from requirements.txt if it exists
-    if [[ -f "/workspaces/iacDNS/requirements.txt" ]]; then
-        pip install -r /workspaces/iacDNS/requirements.txt
+    if [[ -f "/workspaces/provisioner/requirements.txt" ]]; then
+        pip install -r /workspaces/provisioner/requirements.txt
         log "Installed Python packages from requirements.txt"
     else
         # Install basic Ansible
@@ -114,17 +114,17 @@ install_ansible() {
     fi
 
     # Create activation script for easy access
-    cat > ~/.activate_iacDNS << 'EOF'
+    cat > ~/.activate_provisioner << 'EOF'
 #!/bin/bash
-# Activate iacDNS development environment
-source ~/.venv/iacDNS/bin/activate
-echo "iacDNS development environment activated"
+# Activate provisioner development environment
+source ~/.venv/provisioner/bin/activate
+echo "provisioner development environment activated"
 echo "OpenTofu version: $(tofu version | head -n1)"
 echo "Ansible version: $(ansible --version | head -n1)"
 EOF
-    chmod +x ~/.activate_iacDNS
+    chmod +x ~/.activate_provisioner
 
-    log "Created activation script at ~/.activate_iacDNS"
+    log "Created activation script at ~/.activate_provisioner"
 }
 
 # Install additional tools
@@ -205,15 +205,15 @@ setup_shell() {
     # Add helpful aliases to bashrc
     cat >> ~/.bashrc << 'EOF'
 
-# iacDNS Project Aliases
+# provisioner Project Aliases
 alias tofu='tofu'
 alias tf='tofu'
-alias iac-activate='source ~/.activate_iacDNS'
-alias iac='cd /workspaces/iacDNS'
-alias iac-plan='cd /workspaces/iacDNS && tofu plan'
-alias iac-apply='cd /workspaces/iacDNS && tofu apply'
-alias iac-destroy='cd /workspaces/iacDNS && tofu destroy'
-alias iac-status='cd /workspaces/iacDNS && tofu show'
+alias provisioner-activate='source ~/.activate_provisioner'
+alias provisioner='cd /workspaces/provisioner'
+alias provisioner-plan='cd /workspaces/provisioner && tofu plan'
+alias provisioner-apply='cd /workspaces/provisioner && tofu apply'
+alias provisioner-destroy='cd /workspaces/provisioner && tofu destroy'
+alias provisioner-status='cd /workspaces/provisioner && tofu show'
 
 # OpenTofu aliases
 alias tfi='tofu init'
@@ -239,8 +239,8 @@ create_dev_config() {
     log "Creating development configuration files..."
 
     # Create .env template if it doesn't exist
-    if [[ ! -f "/workspaces/iacDNS/.env" && -f "/workspaces/iacDNS/.env.example" ]]; then
-        cp /workspaces/iacDNS/.env.example /workspaces/iacDNS/.env
+    if [[ ! -f "/workspaces/provisioner/.env" && -f "/workspaces/provisioner/.env.example" ]]; then
+        cp /workspaces/provisioner/.env.example /workspaces/provisioner/.env
         warn "Created .env file from .env.example - please update with your credentials"
     fi
 
@@ -269,7 +269,7 @@ verify_installation() {
     fi
 
     # Check Ansible (in virtual environment)
-    source ~/.venv/iacDNS/bin/activate 2>/dev/null
+    source ~/.venv/provisioner/bin/activate 2>/dev/null
     if command -v ansible >/dev/null 2>&1; then
         info "✓ Ansible: $(ansible --version | head -n1)"
     else
@@ -316,14 +316,14 @@ verify_installation() {
         info ""
         info "To get started:"
         info "1. Run 'source ~/.bashrc' to load new aliases"
-        info "2. Run 'iac-activate' to activate the Python environment"
+        info "2. Run 'provisioner-activate' to activate the Python environment"
         info "3. Set environment variables (DIGITALOCEAN_TOKEN, TF_VAR_environment, etc.)"
         info "4. Add your Ansible vault password to $VAULT_PASSWORD_FILE"
         info ""
         info "Useful aliases:"
-        info "  iac         - Go to project directory"
-        info "  iac-plan    - Plan infrastructure changes"
-        info "  iac-apply   - Apply infrastructure changes"
+        info "  provisioner         - Go to project directory"
+        info "  provisioner-plan    - Plan infrastructure changes"
+        info "  provisioner-apply   - Apply infrastructure changes"
         info "  tf/tofu     - OpenTofu commands"
         info ""
     else
@@ -334,7 +334,7 @@ verify_installation() {
 
 # Main execution
 main() {
-    info "IAC Development Environment Setup"
+    info "Development Environment Setup"
     info "===================================="
 
     install_opentofu

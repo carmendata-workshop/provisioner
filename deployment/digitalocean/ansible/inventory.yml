@@ -1,0 +1,26 @@
+all:
+  children:
+    provisioner_servers:
+      hosts:
+        provisioner-server:
+          ansible_host: "143.110.170.228"
+          ansible_user: root
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+          # Configuration from Terraform outputs
+          server_name: provisioner-01
+          server_region: lon1
+          provisioner_version: "latest"
+          github_repo: "carmendata-workshop/provisioner"
+          auto_start_service: true
+          server_timezone: "UTC"
+
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+        ansible_ssh_pipelining: true
+        provisioner_install_dir: "/opt/provisioner"
+        provisioner_config_dir: "/etc/provisioner"
+        provisioner_state_dir: "/var/lib/provisioner"
+        provisioner_log_dir: "/var/log/provisioner"
+        provisioner_user: "provisioner"
+        provisioner_service: "provisioner"

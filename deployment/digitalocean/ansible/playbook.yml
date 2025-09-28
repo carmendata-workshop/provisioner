@@ -1,0 +1,282 @@
+---
+# Ansible Playbook for Provisioner Installation and Configuration
+# This playbook installs and configures the OpenTofu Workspace Provisioner
+
+- name: Install and Configure OpenTofu Workspace Provisioner
+  hosts: provisioner_servers
+  become: true
+  gather_facts: true
+  vars:
+    ansible_ssh_pipelining: true
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required system packages
+      package:
+        name:
+          - curl
+          - wget
+          - git
+          - jq
+          - tree
+          - vim
+          - htop
+          - systemd
+          - ca-certificates
+          - unzip
+          - tar
+          - python3
+          - python3-pip
+        state: present
+
+  tasks:
+    - name: Set system timezone
+      timezone:
+        name: "{{ server_timezone }}"
+
+    - name: Download provisioner install script
+      get_url:
+        url: "{% if provisioner_version == 'latest' %}https://github.com/{{ github_repo }}/releases/latest/download/install.sh{% else %}https://github.com/{{ github_repo }}/releases/download/{{ provisioner_version }}/install.sh{% endif %}"
+        dest: /tmp/install-provisioner.sh
+        mode: '0755'
+        timeout: 30
+
+    - name: Execute provisioner install script
+      command: >
+        /tmp/install-provisioner.sh
+        {% if provisioner_version != 'latest' %}{{ provisioner_version }}{% endif %}
+      register: install_result
+      changed_when: install_result.rc == 0
+      failed_when: install_result.rc != 0
+
+    - name: Verify provisioner installation
+      stat:
+        path: "{{ provisioner_install_dir }}/provisioner"
+      register: provisioner_binary
+
+    - name: Fail if provisioner binary not found
+      fail:
+        msg: "Provisioner binary not found at {{ provisioner_install_dir }}/provisioner"
+      when: not provisioner_binary.stat.exists
+
+    - name: Get provisioner version
+      command: "{{ provisioner_install_dir }}/provisioner --version"
+      register: provisioner_version_output
+      changed_when: false
+
+    - name: Display provisioner version
+      debug:
+        msg: "Installed provisioner version: {{ provisioner_version_output.stdout }}"
+
+    - name: Check if service is installed
+      systemd:
+        name: "{{ provisioner_service }}"
+      register: service_status
+
+    - name: Enable and start provisioner service
+      systemd:
+        name: "{{ provisioner_service }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: auto_start_service | bool
+
+    - name: Create health check script
+      copy:
+        dest: /usr/local/bin/provisioner-health
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          # Provisioner health check script
+
+          echo "=== Provisioner Health Check ==="
+          echo "Date: $(date)"
+          echo "Host: $(hostname)"
+          echo
+
+          # Service status
+          echo "Service Status:"
+          systemctl status {{ provisioner_service }} --no-pager -l
+          echo
+
+          # Resource usage
+          echo "Resource Usage:"
+          echo "Memory: $(free -h | grep Mem)"
+          echo "Disk: $(df -h / | tail -1)"
+          echo "Load: $(uptime)"
+          echo
+
+          # Recent logs
+          echo "Recent Logs (last 10 lines):"
+          journalctl -u {{ provisioner_service }} --no-pager -n 10
+          echo
+
+          # Workspace status
+          echo "Workspace Status:"
+          if command -v workspacectl >/dev/null 2>&1; then
+              workspacectl status 2>/dev/null || echo "No workspaces configured or accessible"
+          else
+              echo "workspacectl not in PATH"
+          fi
+
+          # Template status
+          echo "Template Status:"
+          if command -v templatectl >/dev/null 2>&1; then
+              templatectl list 2>/dev/null || echo "No templates configured or accessible"
+          else
+              echo "templatectl not in PATH"
+          fi
+
+    - name: Setup log rotation
+      copy:
+        dest: /etc/logrotate.d/provisioner
+        content: |
+          {{ provisioner_log_dir }}/*.log {
+              daily
+              missingok
+              rotate 7
+              compress
+              delaycompress
+              notifempty
+              create 640 {{ provisioner_user }} {{ provisioner_user }}
+              postrotate
+                  systemctl reload {{ provisioner_service }} || true
+              endscript
+          }
+
+    - name: Configure automatic security updates
+      block:
+        - name: Install unattended-upgrades
+          package:
+            name:
+              - unattended-upgrades
+              - apt-listchanges
+            state: present
+          when: ansible_os_family == "Debian"
+
+        - name: Configure unattended-upgrades
+          lineinfile:
+            path: /etc/apt/apt.conf.d/50unattended-upgrades
+            line: 'Unattended-Upgrade::Automatic-Reboot "false";'
+            create: true
+          when: ansible_os_family == "Debian"
+
+        - name: Enable unattended-upgrades service
+          systemd:
+            name: unattended-upgrades
+            enabled: true
+            state: started
+          when: ansible_os_family == "Debian"
+
+    - name: Configure firewall (UFW)
+      block:
+        - name: Install ufw
+          package:
+            name: ufw
+            state: present
+          when: ansible_os_family == "Debian"
+
+        - name: Reset UFW to defaults
+          ufw:
+            state: reset
+          when: ansible_os_family == "Debian"
+
+        - name: Set UFW default policies
+          ufw:
+            direction: "{{ item.direction }}"
+            policy: "{{ item.policy }}"
+          loop:
+            - { direction: 'incoming', policy: 'deny' }
+            - { direction: 'outgoing', policy: 'allow' }
+          when: ansible_os_family == "Debian"
+
+        - name: Allow SSH through UFW
+          ufw:
+            rule: allow
+            name: SSH
+          when: ansible_os_family == "Debian"
+
+        - name: Enable UFW
+          ufw:
+            state: enabled
+          when: ansible_os_family == "Debian"
+
+    - name: Create welcome message
+      copy:
+        dest: /etc/motd
+        content: |
+          ================================================================================
+                              OpenTofu Workspace Provisioner Server
+          ================================================================================
+
+          This server is running the OpenTofu Workspace Provisioner - an automated
+          workspace scheduler for infrastructure deployments.
+
+          Server Information:
+            Hostname: {{ ansible_hostname }}
+            OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+            Kernel: {{ ansible_kernel }}
+            Architecture: {{ ansible_architecture }}
+            Total Memory: {{ ansible_memtotal_mb }}MB
+
+          Provisioner Information:
+            Version: {{ provisioner_version_output.stdout | default('Unknown') }}
+            Service: {{ provisioner_service }}
+
+          Useful Commands:
+            systemctl status {{ provisioner_service }}    - Check service status
+            journalctl -u {{ provisioner_service }} -f    - View live logs
+            workspacectl list               - List configured workspaces
+            workspacectl status             - Show workspace status
+            templatectl list                - List available templates
+            jobctl list                     - List configured jobs
+            provisioner-health              - Run health check
+
+          Configuration:
+            Workspaces: {{ provisioner_config_dir }}/workspaces/
+            Templates:  {{ provisioner_state_dir }}/templates/
+            State:      {{ provisioner_state_dir }}/
+            Logs:       {{ provisioner_log_dir }}/
+
+          For documentation and support:
+            https://github.com/{{ github_repo }}
+
+          ================================================================================
+
+  handlers:
+    - name: restart provisioner
+      systemd:
+        name: "{{ provisioner_service }}"
+        state: restarted
+
+  post_tasks:
+    - name: Wait for service to be ready
+      wait_for:
+        timeout: 30
+      when: auto_start_service | bool
+
+    - name: Final service status check
+      systemd:
+        name: "{{ provisioner_service }}"
+      register: final_service_status
+
+    - name: Display final status
+      debug:
+        msg: |
+          Provisioner deployment completed successfully!
+
+          Service Status: {{ final_service_status.status.ActiveState }}
+          Server IP: {{ ansible_default_ipv4.address }}
+          SSH Command: ssh {{ ansible_user }}@{{ ansible_default_ipv4.address }}
+
+          Next Steps:
+          1. Connect to server: ssh {{ ansible_user }}@{{ ansible_default_ipv4.address }}
+          2. Check service: systemctl status {{ provisioner_service }}
+          3. View logs: journalctl -u {{ provisioner_service }} -f
+          4. Configure workspaces in: {{ provisioner_config_dir }}/workspaces/
+          5. Run health check: provisioner-health

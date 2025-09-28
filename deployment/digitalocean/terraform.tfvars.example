@@ -1,0 +1,64 @@
+# DigitalOcean Provisioner Deployment Configuration
+# Copy this file to terraform.tfvars and update with your values
+
+# Required: DigitalOcean API token
+# Get this from: https://cloud.digitalocean.com/account/api/tokens
+digitalocean_token = "dop_v1_your_digitalocean_token_here"
+
+# SSH Keys: All existing SSH keys in your DigitalOcean account will be automatically
+# added to the droplet. Make sure you have at least one SSH key in your DO account.
+# You can add SSH keys at: https://cloud.digitalocean.com/account/security
+
+# Server configuration
+server_name     = "my-provisioner"
+droplet_region  = "lon1"           # Choose: nyc1, nyc2, nyc3, ams2, ams3, sfo1, sfo2, sfo3, sgp1, lon1, fra1, tor1, blr1, syd1
+droplet_size    = "s-1vcpu-2gb"    # Choose: s-1vcpu-1gb, s-1vcpu-2gb, s-2vcpu-2gb, s-2vcpu-4gb, s-4vcpu-8gb, s-6vcpu-16gb, s-8vcpu-32gb
+droplet_image   = "ubuntu-22-04-x64"
+
+# Provisioner configuration
+provisioner_version = "latest"     # or specific version like "v1.0.0"
+auto_start_service  = true
+server_timezone     = "UTC"        # or "America/New_York", "Europe/London", etc.
+
+# Security configuration
+ssh_allowed_ips = ["0.0.0.0/0"]    # Restrict to your IP: ["203.0.113.0/24"]
+enable_monitoring = true
+enable_backups    = false          # Set to true for automated backups (additional cost)
+
+# Web interface (for future features)
+enable_web_interface = false
+
+# DNS configuration (required)
+domain_name = "example.com"         # Your domain managed by DigitalOcean DNS
+subdomain   = "provisioner"         # Creates provisioner.example.com
+dns_ttl     = 300
+
+# Persistent storage (optional)
+create_data_volume = false         # Set to true for separate data volume
+# data_volume_size   = 20          # Size in GB
+
+# Tagging (optional)
+# tags = ["my-tag", "another-tag"]
+
+# Example configurations for different use cases:
+
+# Development/Testing (minimal cost)
+# droplet_size    = "s-1vcpu-1gb"
+# enable_backups  = false
+# create_data_volume = false
+
+# Production (recommended)
+# droplet_size       = "s-2vcpu-4gb"
+# enable_backups     = true
+# create_data_volume = true
+# data_volume_size   = 50
+# ssh_allowed_ips    = ["your.office.ip/32"]
+# domain_name        = "yourdomain.com"
+
+# High Availability (enterprise)
+# droplet_size       = "s-4vcpu-8gb"
+# enable_backups     = true
+# create_data_volume = true
+# data_volume_size   = 100
+# enable_monitoring  = true
+# domain_name        = "yourdomain.com"
