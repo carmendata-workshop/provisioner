@@ -78,12 +78,6 @@ func TestJobManagerIntegration(t *testing.T) {
 		},
 	}
 
-	// Convert jobConfigs to the expected format
-	var jobConfigInterfaces []interface{}
-	for _, config := range jobConfigs {
-		jobConfigInterfaces = append(jobConfigInterfaces, config)
-	}
-
 	// Execute jobs manually for synchronous execution in tests
 	err = jobManager.ManualExecuteJob(workspaceID, "script-job", jobConfigs[0])
 	if err != nil {
@@ -313,12 +307,6 @@ func TestJobConcurrency(t *testing.T) {
 			"enabled":     true,
 			"description": "Concurrent job 3",
 		},
-	}
-
-	// Convert jobConfigs to the expected format
-	var jobConfigInterfaces []interface{}
-	for _, config := range jobConfigs {
-		jobConfigInterfaces = append(jobConfigInterfaces, config)
 	}
 
 	// Execute jobs manually for synchronous execution in tests
