@@ -1,0 +1,54 @@
+{
+  "enabled": true,
+  "template": "main-infrastructure",
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "description": "Demo of sub-workspace deployment using @deployment triggers",
+  "jobs": [
+    {
+      "name": "database-cluster",
+      "type": "template",
+      "schedule": "@deployment",
+      "template": "postgres-cluster",
+      "timeout": "20m",
+      "enabled": true,
+      "description": "Deploy PostgreSQL cluster after main infrastructure"
+    },
+    {
+      "name": "monitoring-stack",
+      "type": "template",
+      "schedule": "@deployment",
+      "template": "prometheus-grafana",
+      "timeout": "15m",
+      "enabled": true,
+      "description": "Deploy monitoring stack after main infrastructure"
+    },
+    {
+      "name": "setup-dns",
+      "type": "script",
+      "schedule": "@deployment",
+      "script": "#!/bin/bash\necho 'Configuring DNS records for deployed infrastructure'\n# Add DNS configuration logic here\necho 'DNS setup completed'",
+      "timeout": "5m",
+      "enabled": true,
+      "description": "Configure DNS records after infrastructure deployment"
+    },
+    {
+      "name": "cleanup-failed-deployment",
+      "type": "script",
+      "schedule": "@deployment-failed",
+      "script": "#!/bin/bash\necho 'Cleaning up after failed deployment'\n# Add cleanup logic here\necho 'Cleanup completed'",
+      "timeout": "10m",
+      "enabled": true,
+      "description": "Cleanup resources after failed deployment"
+    },
+    {
+      "name": "regular-backup",
+      "type": "script",
+      "schedule": "0 2 * * *",
+      "script": "#!/bin/bash\necho 'Running nightly backup'\n# Regular time-based job, not event-based\necho 'Backup completed'",
+      "timeout": "30m",
+      "enabled": true,
+      "description": "Regular nightly backup (time-based, not event-based)"
+    }
+  ]
+}

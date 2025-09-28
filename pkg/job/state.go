@@ -118,6 +118,9 @@ func (sm *StateManager) SetJobState(workspaceID, jobName string, jobState *JobSt
 // UpdateJobExecution updates job state based on execution results
 func (sm *StateManager) UpdateJobExecution(execution *JobExecution) {
 	jobState := sm.GetJobState(execution.WorkspaceID, execution.JobName)
+	if jobState == nil {
+		return // Cannot update execution if we can't get/create job state
+	}
 
 	jobState.Status = execution.Status
 	jobState.RunCount++
@@ -143,6 +146,9 @@ func (sm *StateManager) UpdateJobExecution(execution *JobExecution) {
 // SetJobStatus updates just the status of a job
 func (sm *StateManager) SetJobStatus(workspaceID, jobName string, status JobStatus) {
 	jobState := sm.GetJobState(workspaceID, jobName)
+	if jobState == nil {
+		return // Cannot set status if we can't get/create job state
+	}
 	jobState.Status = status
 	sm.SetJobState(workspaceID, jobName, jobState)
 }
@@ -150,6 +156,9 @@ func (sm *StateManager) SetJobStatus(workspaceID, jobName string, status JobStat
 // SetJobConfigModified marks a job's configuration as modified
 func (sm *StateManager) SetJobConfigModified(workspaceID, jobName string, modTime time.Time) {
 	jobState := sm.GetJobState(workspaceID, jobName)
+	if jobState == nil {
+		return // Cannot set config modified if we can't get/create job state
+	}
 	jobState.LastConfigModified = &modTime
 
 	// Reset failed state to allow retries after config changes

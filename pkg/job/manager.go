@@ -3,6 +3,7 @@ package job
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"provisioner/pkg/logging"
@@ -130,16 +131,19 @@ func (m *Manager) ShouldRunJob(job *Job, now time.Time) bool {
 }
 
 // shouldRunForSchedule checks if a job should run for a specific schedule
-// This is a simplified implementation - in practice, you would integrate with
-// the existing CRON parsing logic from the scheduler package
 func (m *Manager) shouldRunForSchedule(scheduleStr string, now time.Time, jobState *JobState) bool {
-	// Placeholder implementation - would use actual CRON parsing
-	// For demo purposes, run jobs every hour if they haven't run in the last hour
+	// Skip special schedules in time-based processing
+	if strings.HasPrefix(scheduleStr, "@") {
+		return false // Special schedules are event-based, not time-based
+	}
+
+	// For CRON schedules, we need a simpler check here since we can't import scheduler
+	// This is a basic time-based check - in practice, you would use proper CRON parsing
 	if jobState.LastRun == nil {
 		return true // Never run before
 	}
 
-	// Run if last run was more than 1 hour ago
+	// Run if last run was more than 1 hour ago (simplified CRON check)
 	return now.Sub(*jobState.LastRun) > time.Hour
 }
 
@@ -230,4 +234,68 @@ func (m *Manager) SetJobConfigModified(workspaceID string, modTime time.Time) {
 // ListJobs returns information about all jobs in a workspace
 func (m *Manager) ListJobs(workspaceID string) map[string]*JobState {
 	return m.stateManager.GetAllJobStates(workspaceID)
+}
+
+// ShouldRunJobForEvent determines if a job should run based on a deployment event
+func (m *Manager) ShouldRunJobForEvent(job *Job, event DeploymentEvent) bool {
+	jobState := m.stateManager.GetJobState(job.WorkspaceID, job.Name)
+
+	// Don't run if job is disabled
+	if !job.Enabled {
+		return false
+	}
+
+	// Don't run if already running (only if we have a job state)
+	if jobState != nil && jobState.Status == JobStatusRunning {
+		return false
+	}
+
+	// Only process jobs for the same workspace as the event
+	if job.WorkspaceID != event.GetWorkspaceID() {
+		return false
+	}
+
+	// Check if any schedule matches this event
+	schedules, err := job.GetSchedules()
+	if err != nil {
+		logging.LogWorkspace(job.WorkspaceID, "JOB %s: Invalid schedule: %v", job.Name, err)
+		return false
+	}
+
+	for _, scheduleStr := range schedules {
+		if event.MatchesSchedule(scheduleStr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ProcessWorkspaceJobsForEvent processes jobs that should be triggered by a deployment event
+func (m *Manager) ProcessWorkspaceJobsForEvent(workspaceID string, jobConfigs []interface{}, event DeploymentEvent) {
+	// Convert job configs to job objects
+	activeJobs := make([]string, 0, len(jobConfigs))
+	jobs := make([]*Job, 0, len(jobConfigs))
+
+	for _, configInterface := range jobConfigs {
+		job, err := JobConfigToJob(workspaceID, configInterface)
+		if err != nil {
+			logging.LogWorkspace(workspaceID, "Invalid job configuration: %v", err)
+			continue
+		}
+
+		activeJobs = append(activeJobs, job.Name)
+		jobs = append(jobs, job)
+	}
+
+	// Cleanup states for jobs that no longer exist
+	m.stateManager.CleanupJobStates(workspaceID, activeJobs)
+
+	// Check each job to see if it should run for this event
+	for _, job := range jobs {
+		if m.ShouldRunJobForEvent(job, event) {
+			logging.LogWorkspace(workspaceID, "JOB %s: Triggering execution due to event: %s", job.Name, event.GetType())
+			m.ExecuteJobAsync(job)
+		}
+	}
 }

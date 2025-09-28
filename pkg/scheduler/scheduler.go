@@ -437,9 +437,15 @@ func (s *Scheduler) deployWorkspace(workspace workspace.Workspace) {
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
 		s.state.SetWorkspaceError(workspaceName, true, err.Error())
+
+		// Trigger deployment-failed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEventWithError(EventDeploymentFailed, workspaceName, err.Error()))
 	} else {
 		logging.LogWorkspaceOperation(workspaceName, "DEPLOY", "Successfully completed")
 		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
+
+		// Trigger deployment-completed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEvent(EventDeploymentCompleted, workspaceName))
 	}
 
 	_ = s.SaveState()
@@ -465,9 +471,15 @@ func (s *Scheduler) destroyWorkspace(workspace workspace.Workspace) {
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
 		s.state.SetWorkspaceError(workspaceName, false, err.Error())
+
+		// Trigger destroy-failed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEventWithError(EventDestroyFailed, workspaceName, err.Error()))
 	} else {
 		logging.LogWorkspaceOperation(workspaceName, "DESTROY", "Successfully completed")
 		s.state.SetWorkspaceStatus(workspaceName, StatusDestroyed)
+
+		// Trigger destroy-completed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEvent(EventDestroyCompleted, workspaceName))
 	}
 
 	_ = s.SaveState()
@@ -846,9 +858,15 @@ func (s *Scheduler) manualDeployWorkspace(workspace workspace.Workspace) {
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
 		s.state.SetWorkspaceError(workspaceName, true, err.Error())
+
+		// Trigger deployment-failed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEventWithError(EventDeploymentFailed, workspaceName, err.Error()))
 	} else {
 		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY", "Successfully completed")
 		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
+
+		// Trigger deployment-completed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEvent(EventDeploymentCompleted, workspaceName))
 	}
 }
 
@@ -884,6 +902,9 @@ func (s *Scheduler) manualDeployWorkspaceInMode(workspace workspace.Workspace, m
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
 		s.state.SetWorkspaceError(workspaceName, true, err.Error())
+
+		// Trigger deployment-failed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEventWithError(EventDeploymentFailed, workspaceName, err.Error()))
 	} else {
 		logging.LogWorkspaceOperation(workspaceName, "MANUAL DEPLOY MODE", "Successfully completed in mode: %s", mode)
 		s.state.SetWorkspaceStatus(workspaceName, StatusDeployed)
@@ -892,6 +913,9 @@ func (s *Scheduler) manualDeployWorkspaceInMode(workspace workspace.Workspace, m
 		workspaceState := s.state.GetWorkspaceState(workspaceName)
 		workspaceState.DeploymentMode = mode
 		s.state.SetWorkspaceState(workspaceName, workspaceState)
+
+		// Trigger deployment-completed event with mode information for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEventWithMode(EventDeploymentCompleted, workspaceName, mode))
 	}
 }
 
@@ -927,9 +951,15 @@ func (s *Scheduler) manualDestroyWorkspace(workspace workspace.Workspace) {
 		logging.LogSystemd("For detailed error information see: %s", logFile)
 
 		s.state.SetWorkspaceError(workspaceName, false, err.Error())
+
+		// Trigger destroy-failed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEventWithError(EventDestroyFailed, workspaceName, err.Error()))
 	} else {
 		logging.LogWorkspaceOperation(workspaceName, "MANUAL DESTROY", "Successfully completed")
 		s.state.SetWorkspaceStatus(workspaceName, StatusDestroyed)
+
+		// Trigger destroy-completed event for jobs
+		s.triggerJobEvent(workspaceName, NewDeploymentEvent(EventDestroyCompleted, workspaceName))
 	}
 }
 
@@ -1268,4 +1298,46 @@ func (s *Scheduler) initJobManager() error {
 	}
 
 	return nil
+}
+
+// triggerJobEvent triggers jobs that should run in response to a deployment event
+func (s *Scheduler) triggerJobEvent(workspaceID string, event *DeploymentEvent) {
+	// Skip if job manager is not available
+	if s.jobManager == nil {
+		return
+	}
+
+	// Find the workspace to get its job configurations
+	workspace := s.GetWorkspace(workspaceID)
+	if workspace == nil {
+		logging.LogSystemd("Workspace %s not found for event processing", workspaceID)
+		return
+	}
+
+	// Get job configurations from the workspace
+	jobConfigs := workspace.Config.GetJobConfigs()
+	if len(jobConfigs) == 0 {
+		return // No jobs to process
+	}
+
+	// Convert job configs to interface{} slice for the job manager
+	jobConfigInterfaces := make([]interface{}, len(jobConfigs))
+	for i, jobConfig := range jobConfigs {
+		jobConfigInterfaces[i] = map[string]interface{}{
+			"name":        jobConfig.Name,
+			"type":        jobConfig.Type,
+			"schedule":    jobConfig.Schedule,
+			"script":      jobConfig.Script,
+			"command":     jobConfig.Command,
+			"template":    jobConfig.Template,
+			"environment": jobConfig.Environment,
+			"working_dir": jobConfig.WorkingDir,
+			"timeout":     jobConfig.Timeout,
+			"enabled":     jobConfig.Enabled,
+			"description": jobConfig.Description,
+		}
+	}
+
+	// Process jobs for this event
+	s.jobManager.ProcessWorkspaceJobsForEvent(workspaceID, jobConfigInterfaces, event)
 }

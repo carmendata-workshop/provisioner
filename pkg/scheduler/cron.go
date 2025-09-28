@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -13,9 +14,15 @@ type CronSchedule struct {
 	Day    []int
 	Month  []int
 	DOW    []int // Day of week
+	Special string // Special schedules like "@deployment", "@reboot"
 }
 
 func ParseCron(cronExpr string) (*CronSchedule, error) {
+	// Handle special schedules (event-based triggers)
+	if strings.HasPrefix(cronExpr, "@") {
+		return parseSpecialSchedule(cronExpr)
+	}
+
 	fields := strings.Fields(cronExpr)
 	if len(fields) != 5 {
 		return nil, fmt.Errorf("invalid cron expression: expected 5 fields, got %d", len(fields))
@@ -55,6 +62,25 @@ func ParseCron(cronExpr string) (*CronSchedule, error) {
 	}
 
 	return schedule, nil
+}
+
+// parseSpecialSchedule handles special event-based schedules
+func parseSpecialSchedule(cronExpr string) (*CronSchedule, error) {
+	validSpecials := map[string]bool{
+		"@deployment":        true,
+		"@deployment-failed": true,
+		"@destroy":          true,
+		"@destroy-failed":   true,
+		"@reboot":           true,
+	}
+
+	if !validSpecials[cronExpr] {
+		return nil, fmt.Errorf("unsupported special schedule: %s", cronExpr)
+	}
+
+	return &CronSchedule{
+		Special: cronExpr,
+	}, nil
 }
 
 // parseField parses a CRON field supporting *, ranges (1-5), lists (1,3,5), and intervals (*/2)
@@ -121,40 +147,46 @@ func parseField(field string, min, max int) ([]int, error) {
 }
 
 func (c *CronSchedule) ShouldRun(now time.Time) bool {
+	// Special schedules are event-based, not time-based
+	if c.Special != "" {
+		return false // Special schedules don't run on time, only on events
+	}
+
 	// Check minute
-	if c.Minute != nil && !contains(c.Minute, now.Minute()) {
+	if c.Minute != nil && !slices.Contains(c.Minute, now.Minute()) {
 		return false
 	}
 
 	// Check hour
-	if c.Hour != nil && !contains(c.Hour, now.Hour()) {
+	if c.Hour != nil && !slices.Contains(c.Hour, now.Hour()) {
 		return false
 	}
 
 	// Check day
-	if c.Day != nil && !contains(c.Day, now.Day()) {
+	if c.Day != nil && !slices.Contains(c.Day, now.Day()) {
 		return false
 	}
 
 	// Check month
-	if c.Month != nil && !contains(c.Month, int(now.Month())) {
+	if c.Month != nil && !slices.Contains(c.Month, int(now.Month())) {
 		return false
 	}
 
 	// Check day of week
-	if c.DOW != nil && !contains(c.DOW, int(now.Weekday())) {
+	if c.DOW != nil && !slices.Contains(c.DOW, int(now.Weekday())) {
 		return false
 	}
 
 	return true
 }
 
-// contains checks if a slice contains a specific value
-func contains(slice []int, value int) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
+// IsSpecialSchedule returns true if this is an event-based schedule
+func (c *CronSchedule) IsSpecialSchedule() bool {
+	return c.Special != ""
 }
+
+// GetSpecialSchedule returns the special schedule type
+func (c *CronSchedule) GetSpecialSchedule() string {
+	return c.Special
+}
+
