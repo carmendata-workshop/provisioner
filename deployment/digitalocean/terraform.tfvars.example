@@ -33,8 +33,7 @@ domain_name = "example.com"         # Your domain managed by DigitalOcean DNS
 subdomain   = "provisioner"         # Creates provisioner.example.com
 dns_ttl     = 300
 
-# Persistent storage (optional)
-create_data_volume = false         # Set to true for separate data volume
+# Persistent storage
 # data_volume_size   = 20          # Size in GB
 
 # Tagging (optional)
@@ -45,12 +44,10 @@ create_data_volume = false         # Set to true for separate data volume
 # Development/Testing (minimal cost)
 # droplet_size    = "s-1vcpu-1gb"
 # enable_backups  = false
-# create_data_volume = false
 
 # Production (recommended)
 # droplet_size       = "s-2vcpu-4gb"
 # enable_backups     = true
-# create_data_volume = true
 # data_volume_size   = 50
 # ssh_allowed_ips    = ["your.office.ip/32"]
 # domain_name        = "yourdomain.com"
@@ -58,7 +55,6 @@ create_data_volume = false         # Set to true for separate data volume
 # High Availability (enterprise)
 # droplet_size       = "s-4vcpu-8gb"
 # enable_backups     = true
-# create_data_volume = true
 # data_volume_size   = 100
 # enable_monitoring  = true
 # domain_name        = "yourdomain.com"

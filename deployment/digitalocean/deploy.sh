@@ -323,7 +323,7 @@ all:
         provisioner-server:
           ansible_host: "$server_ip"
           ansible_user: root
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+          # Persistent SSH host keys - no need for StrictHostKeyChecking=no
 
           # Configuration from Terraform outputs
           server_name: $(echo "$outputs" | jq -r '.droplet_name.value // "provisioner-server"')
@@ -366,7 +366,7 @@ run_ansible() {
     local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@"$server_ip" "echo 'SSH Ready'" >/dev/null 2>&1; then
+        if ssh -o ConnectTimeout=5 root@"$server_ip" "echo 'SSH Ready'" >/dev/null 2>&1; then
             log "SSH connection established"
             break
         fi
@@ -399,7 +399,7 @@ ssh_to_server() {
     fi
 
     log "Connecting to server: $server_ip"
-    ssh -o StrictHostKeyChecking=no root@"$server_ip"
+    ssh root@"$server_ip"
 }
 
 # Show service logs
@@ -413,7 +413,7 @@ show_logs() {
     fi
 
     log "Showing provisioner logs from: $server_ip"
-    ssh -o StrictHostKeyChecking=no root@"$server_ip" "journalctl -u provisioner -f"
+    ssh root@"$server_ip" "journalctl -u provisioner -f"
 }
 
 # Run health check
@@ -427,7 +427,7 @@ health_check() {
     fi
 
     log "Running health check on: $server_ip"
-    ssh -o StrictHostKeyChecking=no root@"$server_ip" "provisioner-health"
+    ssh root@"$server_ip" "provisioner-health"
 }
 
 # Show deployment status

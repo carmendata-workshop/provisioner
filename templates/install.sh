@@ -42,7 +42,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 cd "$TEMP_DIR"
 
 # Download all binaries
-BINARIES="provisioner workspacectl templatectl"
+BINARIES="provisioner workspacectl templatectl jobctl"
 if [ "$VERSION" = "latest" ]; then
     echo "🔍 Finding latest release..."
     BASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download"
@@ -296,8 +296,11 @@ echo "💻 Available commands:"
 echo "  - provisioner --help        # Scheduler daemon"
 echo "  - workspacectl --help     # Workspace management"
 echo "  - templatectl --help        # Template management"
+echo "  - jobctl --help             # Job management"
 echo ""
 echo "📖 Quick examples:"
 echo "  workspacectl list                    # List workspaces"
 echo "  workspacectl deploy my-app          # Deploy immediately"
 echo "  templatectl list                      # List templates"
+echo "  jobctl list                          # List standalone jobs"
+echo "  jobctl --workspace my-app status    # Check workspace jobs"

@@ -3,12 +3,12 @@ all:
     provisioner_servers:
       hosts:
         provisioner-server:
-          ansible_host: "143.110.170.228"
+          ansible_host: "134.209.16.223"
           ansible_user: root
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+          # Persistent SSH host keys - no need for StrictHostKeyChecking=no
 
           # Configuration from Terraform outputs
-          server_name: provisioner-01
+          server_name: provisioner.comcar.net
           server_region: lon1
           provisioner_version: "latest"
           github_repo: "carmendata-workshop/provisioner"

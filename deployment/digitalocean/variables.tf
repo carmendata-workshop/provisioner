@@ -157,14 +157,8 @@ variable "dns_ttl" {
 }
 
 # Storage Configuration
-variable "create_data_volume" {
-  description = "Whether to create and attach a separate data volume for persistent storage"
-  type        = bool
-  default     = false
-}
-
 variable "data_volume_size" {
-  description = "Size of the data volume in GB (if create_data_volume is true)"
+  description = "Size of the data volume in GB for persistent storage"
   type        = number
   default     = 10
 

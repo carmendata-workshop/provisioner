@@ -64,13 +64,13 @@ output "dns_validation" {
 }
 
 output "volume_info" {
-  description = "Information about the created data volume (if enabled)"
-  value = var.create_data_volume ? {
-    volume_id   = digitalocean_volume.provisioner_data[0].id
-    volume_name = digitalocean_volume.provisioner_data[0].name
-    size_gb     = digitalocean_volume.provisioner_data[0].size
+  description = "Information about the persistent data volume (always created)"
+  value = {
+    volume_id   = digitalocean_volume.provisioner_data.id
+    volume_name = digitalocean_volume.provisioner_data.name
+    size_gb     = digitalocean_volume.provisioner_data.size
     mount_path  = "/mnt/provisioner-data"
-  } : null
+  }
 }
 
 output "service_status_command" {

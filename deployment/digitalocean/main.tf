@@ -22,7 +22,7 @@ data "digitalocean_ssh_keys" "all" {}
 # Create a new droplet for the provisioner
 resource "digitalocean_droplet" "provisioner" {
   image     = var.droplet_image
-  name      = var.server_name
+  name      = "${var.subdomain}.${var.domain_name}"
   region    = var.droplet_region
   size      = var.droplet_size
   ssh_keys  = data.digitalocean_ssh_keys.all.ssh_keys[*].id
@@ -33,6 +33,11 @@ resource "digitalocean_droplet" "provisioner" {
 
   # Add user-specified tags only
   tags = var.tags
+
+  # Create before destroy to ensure zero downtime deployments
+  lifecycle {
+    create_before_destroy = true
+  }
 
   # User data script to bootstrap the server
   user_data = templatefile("${path.module}/bootstrap.sh", {
@@ -62,7 +67,7 @@ resource "digitalocean_droplet" "provisioner" {
 
 # Create a firewall for the provisioner droplet
 resource "digitalocean_firewall" "provisioner" {
-  name = "${var.server_name}-firewall"
+  name = "${replace("${var.subdomain}.${var.domain_name}", ".", "-")}-firewall"
 
   droplet_ids = [digitalocean_droplet.provisioner.id]
 
@@ -141,20 +146,16 @@ resource "digitalocean_record" "provisioner" {
   ttl    = var.dns_ttl
 }
 
-# Optional: Create a volume for persistent data
+# Create a volume for persistent data (always enabled)
 resource "digitalocean_volume" "provisioner_data" {
-  count = var.create_data_volume ? 1 : 0
-
   region      = var.droplet_region
-  name        = "${var.server_name}-data"
+  name        = "${replace("${var.subdomain}.${var.domain_name}", ".", "-")}-data"
   size        = var.data_volume_size
   description = "Persistent data volume for provisioner state and logs"
   tags        = var.tags
 }
 
 resource "digitalocean_volume_attachment" "provisioner_data" {
-  count = var.create_data_volume ? 1 : 0
-
   droplet_id = digitalocean_droplet.provisioner.id
-  volume_id  = digitalocean_volume.provisioner_data[0].id
+  volume_id  = digitalocean_volume.provisioner_data.id
 }

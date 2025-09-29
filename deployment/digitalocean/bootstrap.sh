@@ -233,48 +233,131 @@ For documentation and support:
 ================================================================================
 EOF
 
-# Setup data volume if mount point exists (created by Terraform)
-if [ -d "/mnt/provisioner-data" ]; then
-    log "Configuring data volume..."
+# Configure data volume (always present)
+log "Configuring persistent data volume..."
 
-    # Format and mount the volume if it's not already mounted
-    DEVICE=$(lsblk -ln -o NAME,MOUNTPOINT | grep -v "/" | head -1 | awk '{print $1}')
-    if [ -n "$DEVICE" ] && [ ! -d "/mnt/provisioner-data/lost+found" ]; then
-        log "Formatting and mounting data volume: /dev/$DEVICE"
-        mkfs.ext4 "/dev/$DEVICE"
-        mount "/dev/$DEVICE" /mnt/provisioner-data
+# Wait for volume to be attached (DigitalOcean volumes are attached at /dev/disk/by-id/scsi-0DO_Volume_*)
+VOLUME_DEVICE=""
+VOLUME_MOUNT="/mnt/provisioner-data"
+TIMEOUT=60
+COUNTER=0
 
-        # Add to fstab for persistent mounting
-        echo "/dev/$DEVICE /mnt/provisioner-data ext4 defaults,nofail 0 2" >> /etc/fstab
-
-        # Create directories and set permissions
-        mkdir -p /mnt/provisioner-data/{state,logs,templates,deployments}
-        chown -R provisioner:provisioner /mnt/provisioner-data
-
-        # Create symlinks to data volume
-        systemctl stop provisioner || true
-        mv /var/lib/provisioner /var/lib/provisioner.backup 2>/dev/null || true
-        mv /var/log/provisioner /var/log/provisioner.backup 2>/dev/null || true
-
-        ln -sf /mnt/provisioner-data/state /var/lib/provisioner
-        ln -sf /mnt/provisioner-data/logs /var/log/provisioner
-
-        # Restore any existing data
-        if [ -d "/var/lib/provisioner.backup" ]; then
-            cp -r /var/lib/provisioner.backup/* /mnt/provisioner-data/state/ 2>/dev/null || true
-        fi
-        if [ -d "/var/log/provisioner.backup" ]; then
-            cp -r /var/log/provisioner.backup/* /mnt/provisioner-data/logs/ 2>/dev/null || true
-        fi
-
-        chown -R provisioner:provisioner /mnt/provisioner-data
-        systemctl start provisioner || true
-
-        log "Data volume configured successfully"
-    else
-        log "Data volume appears to be already configured or device not found"
+log "Waiting for data volume to be attached..."
+while [ $COUNTER -lt $TIMEOUT ]; do
+    # Look for DigitalOcean volume by ID pattern
+    VOLUME_DEVICE=$(find /dev/disk/by-id -name "scsi-0DO_Volume_*" 2>/dev/null | head -1)
+    if [ -n "$VOLUME_DEVICE" ]; then
+        log "Found data volume: $VOLUME_DEVICE"
+        break
     fi
+    sleep 1
+    COUNTER=$((COUNTER + 1))
+done
+
+if [ -z "$VOLUME_DEVICE" ]; then
+    error "Data volume not found after $TIMEOUT seconds. Cannot continue without persistent storage."
+    exit 1
 fi
+
+# Create mount point
+mkdir -p "$VOLUME_MOUNT"
+
+# Check if volume is already formatted (look for existing filesystem)
+if ! blkid "$VOLUME_DEVICE" >/dev/null 2>&1; then
+    log "Formatting new data volume..."
+    mkfs.ext4 -F "$VOLUME_DEVICE"
+    log "Data volume formatted successfully"
+else
+    log "Data volume already has filesystem, skipping format"
+fi
+
+# Mount the volume
+log "Mounting data volume..."
+mount "$VOLUME_DEVICE" "$VOLUME_MOUNT"
+
+# Add to fstab for persistent mounting (use UUID for reliability)
+VOLUME_UUID=$(blkid -s UUID -o value "$VOLUME_DEVICE")
+log "Adding volume to fstab with UUID: $VOLUME_UUID"
+# Remove any existing entry for this mount point
+sed -i "\|$VOLUME_MOUNT|d" /etc/fstab
+echo "UUID=$VOLUME_UUID $VOLUME_MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
+
+# Setup persistent SSH host keys
+log "Configuring persistent SSH host keys..."
+SSH_KEYS_DIR="$VOLUME_MOUNT/ssh-host-keys"
+mkdir -p "$SSH_KEYS_DIR"
+
+# If this is a new volume or no SSH keys exist, generate them
+if [ ! -f "$SSH_KEYS_DIR/ssh_host_rsa_key" ]; then
+    log "Generating new SSH host keys for persistence..."
+    ssh-keygen -t rsa -b 4096 -f "$SSH_KEYS_DIR/ssh_host_rsa_key" -N ""
+    ssh-keygen -t ecdsa -f "$SSH_KEYS_DIR/ssh_host_ecdsa_key" -N ""
+    ssh-keygen -t ed25519 -f "$SSH_KEYS_DIR/ssh_host_ed25519_key" -N ""
+    chmod 600 "$SSH_KEYS_DIR"/ssh_host_*_key
+    chmod 644 "$SSH_KEYS_DIR"/ssh_host_*_key.pub
+    log "New SSH host keys generated and stored on persistent volume"
+else
+    log "Using existing SSH host keys from persistent volume"
+fi
+
+# Replace system SSH host keys with persistent ones
+systemctl stop ssh || systemctl stop sshd || true
+rm -f /etc/ssh/ssh_host_*_key*
+cp "$SSH_KEYS_DIR"/ssh_host_* /etc/ssh/
+chown root:root /etc/ssh/ssh_host_*
+chmod 600 /etc/ssh/ssh_host_*_key
+chmod 644 /etc/ssh/ssh_host_*_key.pub
+systemctl start ssh || systemctl start sshd || true
+log "SSH host keys installed from persistent storage"
+
+# Create directory structure on data volume
+log "Setting up directory structure on data volume..."
+mkdir -p "$VOLUME_MOUNT"/{state,logs,templates,deployments,configs}
+
+# Setup symlinks for standard filesystem compliance
+log "Creating symlinks for standard filesystem compliance..."
+
+# Stop provisioner service if running
+systemctl stop provisioner 2>/dev/null || true
+
+# Backup existing data if present
+if [ -d "/var/lib/provisioner" ] && [ ! -L "/var/lib/provisioner" ]; then
+    log "Backing up existing provisioner state data..."
+    cp -r /var/lib/provisioner/* "$VOLUME_MOUNT/state/" 2>/dev/null || true
+    mv /var/lib/provisioner /var/lib/provisioner.backup
+fi
+
+if [ -d "/var/log/provisioner" ] && [ ! -L "/var/log/provisioner" ]; then
+    log "Backing up existing provisioner log data..."
+    cp -r /var/log/provisioner/* "$VOLUME_MOUNT/logs/" 2>/dev/null || true
+    mv /var/log/provisioner /var/log/provisioner.backup
+fi
+
+if [ -d "/etc/provisioner" ] && [ ! -L "/etc/provisioner" ]; then
+    log "Backing up existing provisioner configuration..."
+    cp -r /etc/provisioner/* "$VOLUME_MOUNT/configs/" 2>/dev/null || true
+    mv /etc/provisioner /etc/provisioner.backup
+fi
+
+# Create symlinks to persistent storage
+ln -sf "$VOLUME_MOUNT/state" /var/lib/provisioner
+ln -sf "$VOLUME_MOUNT/logs" /var/log/provisioner
+ln -sf "$VOLUME_MOUNT/configs" /etc/provisioner
+
+# Set proper ownership
+chown -R provisioner:provisioner "$VOLUME_MOUNT"/{state,logs,templates,deployments}
+chown -R root:root "$VOLUME_MOUNT/configs"
+
+# Create provisioner group and user if they don't exist (they should from install script)
+getent group provisioner >/dev/null || groupadd --system provisioner
+getent passwd provisioner >/dev/null || useradd --system --gid provisioner --home-dir /var/lib/provisioner --shell /usr/sbin/nologin provisioner
+
+log "Persistent data volume configured successfully"
+log "  Mount point: $VOLUME_MOUNT"
+log "  Device: $VOLUME_DEVICE"
+log "  UUID: $VOLUME_UUID"
+log "  Symlinks created for: /var/lib/provisioner, /var/log/provisioner, /etc/provisioner"
+log "  SSH host keys: Persistent across server recreations"
 
 # Final system status
 log "Bootstrap completed! System status:"
