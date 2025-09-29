@@ -244,12 +244,13 @@ create_dev_config() {
         warn "Created .env file from .env.example - please update with your credentials"
     fi
 
-    # Create ansible vault password file location (project-specific)
-    PROJECT_NAME=$(basename "$PWD")
-    VAULT_PASSWORD_FILE="$HOME/.ansible_vault_$PROJECT_NAME"
-    touch "$VAULT_PASSWORD_FILE"
-    chmod 600 "$VAULT_PASSWORD_FILE"
-    warn "Created $VAULT_PASSWORD_FILE - please add your Ansible vault password"
+    # Note: Ansible vault password file creation skipped
+    # This project doesn't use vault-encrypted variables
+    # PROJECT_NAME=$(basename "$PWD")
+    # VAULT_PASSWORD_FILE="$HOME/.ansible_vault_$PROJECT_NAME"
+    # touch "$VAULT_PASSWORD_FILE"
+    # chmod 600 "$VAULT_PASSWORD_FILE"
+    # warn "Created $VAULT_PASSWORD_FILE - please add your Ansible vault password"
 
     log "Development configuration setup complete"
 }
@@ -318,7 +319,7 @@ verify_installation() {
         info "1. Run 'source ~/.bashrc' to load new aliases"
         info "2. Run 'provisioner-activate' to activate the Python environment"
         info "3. Set environment variables (DIGITALOCEAN_TOKEN, TF_VAR_environment, etc.)"
-        info "4. Add your Ansible vault password to $VAULT_PASSWORD_FILE"
+        info "4. Configure any necessary environment variables for your deployments"
         info ""
         info "Useful aliases:"
         info "  provisioner         - Go to project directory"

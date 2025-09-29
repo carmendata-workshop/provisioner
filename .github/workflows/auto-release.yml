@@ -183,8 +183,8 @@ jobs:
           -X provisioner/pkg/version.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
           -w -s"
 
-        # Build all three binaries
-        for binary in provisioner workspacectl templatectl; do
+        # Build all four binaries
+        for binary in provisioner workspacectl templatectl jobctl; do
           echo "Building $binary for ${{ matrix.os }}-${{ matrix.arch }}"
           CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags "$LDFLAGS" \
             -o bin/${binary}-${{ matrix.os }}-${{ matrix.arch }} ./cmd/${binary}
@@ -242,7 +242,7 @@ jobs:
         find . -name "*-linux-*" -o -name "*-darwin-*" -type f
 
         # Upload all binary files
-        for file in provisioner-* workspacectl-* templatectl-*; do
+        for file in provisioner-* workspacectl-* templatectl-* jobctl-*; do
           if [ -f "$file" ]; then
             echo "Uploading $file"
             gh release upload ${{ needs.check-version.outputs.new-version }} "$file"
