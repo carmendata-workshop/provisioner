@@ -1,5 +1,5 @@
 # Build variables
-BINARIES=provisioner workspacectl templatectl jobctl
+BINARIES=provisioner workspacectl templatectl jobctl environmentctl
 BIN_DIR=./bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -204,7 +204,7 @@ run: build
 	$(BIN_DIR)/provisioner
 
 # Individual binary build targets
-.PHONY: build-provisioner build-workspacectl build-templatectl build-jobctl
+.PHONY: build-provisioner build-workspacectl build-templatectl build-jobctl build-environmentctl
 build-provisioner: $(BIN_DIR)
 	@echo "Building provisioner..."
 	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/provisioner ./cmd/provisioner
@@ -220,3 +220,7 @@ build-templatectl: $(BIN_DIR)
 build-jobctl: $(BIN_DIR)
 	@echo "Building jobctl..."
 	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/jobctl ./cmd/jobctl
+
+build-environmentctl: $(BIN_DIR)
+	@echo "Building environmentctl..."
+	CGO_ENABLED=0 go build ${BUILD_FLAGS} ${LDFLAGS} -o ${BIN_DIR}/environmentctl ./cmd/environmentctl

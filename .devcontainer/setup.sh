@@ -109,7 +109,7 @@ install_ansible() {
         log "Installed Python packages from requirements.txt"
     else
         # Install basic Ansible
-        pip install ansible>=6.0.0 jinja2>=3.1.0 pyyaml>=6.0
+        pip install "ansible>=6.0.0" "jinja2>=3.1.0" "pyyaml>=6.0"
         log "Installed basic Ansible packages"
     fi
 

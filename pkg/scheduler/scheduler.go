@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"provisioner/pkg/environment"
 	"provisioner/pkg/job"
 	"provisioner/pkg/logging"
 	"provisioner/pkg/opentofu"
@@ -274,9 +275,14 @@ func (s *Scheduler) checkWorkspaceSchedules(workspace workspace.Workspace, now t
 	} else if len(destroySchedules) == 0 {
 		// Permanent deployment - no destroy schedules (destroy_schedule: false)
 		// Log only in verbose mode to avoid spam
-	} else if s.ShouldRunDestroySchedule(destroySchedules, now, workspaceState) {
-		logging.LogWorkspace(workspace.Name, "Triggering destruction")
-		go s.destroyWorkspace(workspace)
+	} else {
+		// Check if workspace is protected by environment assignment
+		if protectedBy, isProtected := s.isWorkspaceProtectedByEnvironment(workspace.Name); isProtected {
+			logging.LogWorkspace(workspace.Name, "Skipping scheduled destruction - workspace is assigned to environment '%s'", protectedBy)
+		} else if s.ShouldRunDestroySchedule(destroySchedules, now, workspaceState) {
+			logging.LogWorkspace(workspace.Name, "Triggering destruction")
+			go s.destroyWorkspace(workspace)
+		}
 	}
 
 	// Process jobs if job manager is available
@@ -697,6 +703,11 @@ func (s *Scheduler) ManualDeploy(workspaceName string) error {
 
 // ManualDestroy destroys a specific workspace immediately, bypassing schedule checks
 func (s *Scheduler) ManualDestroy(workspaceName string) error {
+	// Check if workspace is protected by environment assignment
+	if protectedBy, isProtected := s.isWorkspaceProtectedByEnvironment(workspaceName); isProtected {
+		return fmt.Errorf("cannot destroy workspace '%s' - it is currently assigned to environment '%s'. Use 'environmentctl switch %s OTHERWORKSPACE' first", workspaceName, protectedBy, protectedBy)
+	}
+
 	// Find the workspace by name
 	var targetWorkspace *workspace.Workspace
 	for i, workspace := range s.workspaces {
@@ -1341,4 +1352,21 @@ func (s *Scheduler) triggerJobEvent(workspaceID string, event *DeploymentEvent) 
 
 	// Process jobs for this event
 	s.jobManager.ProcessWorkspaceJobsForEvent(workspaceID, jobConfigInterfaces, event)
+}
+
+// isWorkspaceProtectedByEnvironment checks if a workspace is currently assigned to any environment
+// Returns (environmentName, true) if protected, ("", false) if not protected
+func (s *Scheduler) isWorkspaceProtectedByEnvironment(workspaceName string) (string, bool) {
+	assignedWorkspaces, err := environment.GetAssignedWorkspaces()
+	if err != nil {
+		// Log error but don't block operations
+		logging.LogSystemd("Warning: failed to check environment assignments: %v", err)
+		return "", false
+	}
+
+	if environmentName, exists := assignedWorkspaces[workspaceName]; exists {
+		return environmentName, true
+	}
+
+	return "", false
 }
