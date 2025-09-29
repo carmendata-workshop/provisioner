@@ -199,8 +199,14 @@ func TestSchedulerCheckWorkspaceSchedules(t *testing.T) {
 	// Workspace starts as destroyed, so deploy should trigger
 	scheduler.checkWorkspaceSchedules(workspace, testTime)
 
-	// Wait a brief moment for goroutine to complete
-	time.Sleep(10 * time.Millisecond)
+	// Wait for goroutine to complete with retries for coverage runs
+	maxRetries := 50
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if mockClient.DeployCallCount == 1 {
+			break
+		}
+	}
 
 	// Verify deploy was called
 	if mockClient.DeployCallCount != 1 {
@@ -214,8 +220,13 @@ func TestSchedulerCheckWorkspaceSchedules(t *testing.T) {
 	// Now destroy should trigger (since workspace is deployed and destroy time has passed)
 	scheduler.checkWorkspaceSchedules(workspace, testTime)
 
-	// Wait a brief moment for goroutine to complete
-	time.Sleep(10 * time.Millisecond)
+	// Wait for goroutine to complete with retries for coverage runs
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if mockClient.DestroyCallCount == 1 {
+			break
+		}
+	}
 
 	// Verify destroy was called
 	if mockClient.DestroyCallCount != 1 {
