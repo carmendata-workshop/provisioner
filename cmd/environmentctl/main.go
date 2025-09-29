@@ -126,7 +126,7 @@ func showAllEnvironments() {
 
 	for _, env := range environments {
 		reservedIPsStr := strings.Join(env.Config.ReservedIPs, ", ")
-		healthCheckStr := fmt.Sprintf("%s", env.Config.HealthCheck.Type)
+		healthCheckStr := env.Config.HealthCheck.Type
 		if env.Config.HealthCheck.Port > 0 {
 			healthCheckStr += fmt.Sprintf(":%d", env.Config.HealthCheck.Port)
 		}

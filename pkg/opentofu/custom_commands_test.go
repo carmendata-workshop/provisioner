@@ -39,8 +39,8 @@ func TestDeployWithCustomCommands(t *testing.T) {
 
 	// Set up test state directory
 	stateDir := filepath.Join(tmpDir, "state")
-	os.Setenv("PROVISIONER_STATE_DIR", stateDir)
-	defer os.Unsetenv("PROVISIONER_STATE_DIR")
+	_ = os.Setenv("PROVISIONER_STATE_DIR", stateDir)
+	defer func() { _ = os.Unsetenv("PROVISIONER_STATE_DIR") }()
 
 	// Create client
 	client, err := New()
@@ -90,8 +90,8 @@ func TestDeployWithPartialCustomCommands(t *testing.T) {
 
 	// Set up test state directory
 	stateDir := filepath.Join(tmpDir, "state")
-	os.Setenv("PROVISIONER_STATE_DIR", stateDir)
-	defer os.Unsetenv("PROVISIONER_STATE_DIR")
+	_ = os.Setenv("PROVISIONER_STATE_DIR", stateDir)
+	defer func() { _ = os.Unsetenv("PROVISIONER_STATE_DIR") }()
 
 	// Create client
 	client, err := New()
@@ -135,8 +135,8 @@ func TestDestroyWithCustomCommands(t *testing.T) {
 
 	// Set up test state directory
 	stateDir := filepath.Join(tmpDir, "state")
-	os.Setenv("PROVISIONER_STATE_DIR", stateDir)
-	defer os.Unsetenv("PROVISIONER_STATE_DIR")
+	_ = os.Setenv("PROVISIONER_STATE_DIR", stateDir)
+	defer func() { _ = os.Unsetenv("PROVISIONER_STATE_DIR") }()
 
 	// Create client
 	client, err := New()
@@ -234,8 +234,8 @@ func TestDeployWithoutCustomCommands(t *testing.T) {
 
 	// Set up test state directory
 	stateDir := filepath.Join(tmpDir, "state")
-	os.Setenv("PROVISIONER_STATE_DIR", stateDir)
-	defer os.Unsetenv("PROVISIONER_STATE_DIR")
+	_ = os.Setenv("PROVISIONER_STATE_DIR", stateDir)
+	defer func() { _ = os.Unsetenv("PROVISIONER_STATE_DIR") }()
 
 	// Create client
 	client, err := New()
