@@ -214,6 +214,11 @@ func (c *Client) Deploy(ws *workspace.Workspace) error {
 		return fmt.Errorf("failed to copy workspace files: %w", err)
 	}
 
+	// Check for custom deploy commands
+	if ws.Config.CustomDeploy != nil {
+		return c.deployWithCustomCommands(ws, workingDir, ws.Config.CustomDeploy)
+	}
+
 	// Run OpenTofu sequence: init → plan → apply
 	if err := c.Init(workingDir); err != nil {
 		return fmt.Errorf("init failed: %w", err)
@@ -274,6 +279,11 @@ func (c *Client) DestroyWorkspace(ws *workspace.Workspace) error {
 	// Copy workspace template files to working directory (preserving state files)
 	if err := copyWorkspaceTemplateFiles(ws, workingDir); err != nil {
 		return fmt.Errorf("failed to copy workspace files: %w", err)
+	}
+
+	// Check for custom destroy commands
+	if ws.Config.CustomDestroy != nil {
+		return c.destroyWithCustomCommands(ws, workingDir, ws.Config.CustomDestroy)
 	}
 
 	// Run OpenTofu sequence: init → destroy
@@ -471,6 +481,95 @@ func getStateDir() string {
 
 	// Fall back to development default
 	return "state"
+}
+
+// deployWithCustomCommands executes custom deployment commands
+func (c *Client) deployWithCustomCommands(ws *workspace.Workspace, workingDir string, customDeploy *workspace.CustomDeployConfig) error {
+	// Execute custom init command (or fall back to default)
+	if customDeploy.InitCommand != "" {
+		if err := c.executeCustomCommand(customDeploy.InitCommand, workingDir); err != nil {
+			return fmt.Errorf("custom init failed: %w", err)
+		}
+	} else {
+		if err := c.Init(workingDir); err != nil {
+			return fmt.Errorf("init failed: %w", err)
+		}
+	}
+
+	// Execute custom plan command (or fall back to default)
+	if customDeploy.PlanCommand != "" {
+		if err := c.executeCustomCommand(customDeploy.PlanCommand, workingDir); err != nil {
+			return fmt.Errorf("custom plan failed: %w", err)
+		}
+	} else {
+		if err := c.Plan(workingDir); err != nil {
+			return fmt.Errorf("plan failed: %w", err)
+		}
+	}
+
+	// Execute custom apply command (or fall back to default)
+	if customDeploy.ApplyCommand != "" {
+		if err := c.executeCustomCommand(customDeploy.ApplyCommand, workingDir); err != nil {
+			return fmt.Errorf("custom apply failed: %w", err)
+		}
+	} else {
+		if err := c.Apply(workingDir); err != nil {
+			return fmt.Errorf("apply failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// destroyWithCustomCommands executes custom destroy commands
+func (c *Client) destroyWithCustomCommands(ws *workspace.Workspace, workingDir string, customDestroy *workspace.CustomDestroyConfig) error {
+	// Execute custom init command (or fall back to default)
+	if customDestroy.InitCommand != "" {
+		if err := c.executeCustomCommand(customDestroy.InitCommand, workingDir); err != nil {
+			return fmt.Errorf("custom init failed: %w", err)
+		}
+	} else {
+		if err := c.Init(workingDir); err != nil {
+			return fmt.Errorf("init failed: %w", err)
+		}
+	}
+
+	// Execute custom destroy command (or fall back to default)
+	if customDestroy.DestroyCommand != "" {
+		if err := c.executeCustomCommand(customDestroy.DestroyCommand, workingDir); err != nil {
+			return fmt.Errorf("custom destroy failed: %w", err)
+		}
+	} else {
+		if err := c.Destroy(workingDir); err != nil {
+			return fmt.Errorf("destroy failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// executeCustomCommand runs a custom shell command in the working directory
+func (c *Client) executeCustomCommand(command, workingDir string) error {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Dir = workingDir
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// Include detailed output in error
+	if err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stderr.String())
+		}
+		if stdout.Len() > 0 {
+			return fmt.Errorf("%w\n\nDetailed output:\n%s", err, stdout.String())
+		}
+	}
+
+	return err
 }
 
 // GetWorkingDir returns the working directory for a workspace

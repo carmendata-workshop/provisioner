@@ -17,6 +17,21 @@ type Config struct {
 	ModeSchedules   map[string]interface{} `json:"mode_schedules,omitempty"`
 	Jobs            []JobConfig            `json:"jobs,omitempty"`
 	Description     string                 `json:"description"`
+	CustomDeploy    *CustomDeployConfig    `json:"custom_deploy,omitempty"`
+	CustomDestroy   *CustomDestroyConfig   `json:"custom_destroy,omitempty"`
+}
+
+// CustomDeployConfig allows overriding default OpenTofu deployment commands
+type CustomDeployConfig struct {
+	InitCommand  string `json:"init_command,omitempty"`  // Override "tofu init"
+	PlanCommand  string `json:"plan_command,omitempty"`  // Override "tofu plan"
+	ApplyCommand string `json:"apply_command,omitempty"` // Override "tofu apply -auto-approve"
+}
+
+// CustomDestroyConfig allows overriding default OpenTofu destroy commands
+type CustomDestroyConfig struct {
+	InitCommand    string `json:"init_command,omitempty"`    // Override "tofu init"
+	DestroyCommand string `json:"destroy_command,omitempty"` // Override "tofu destroy -auto-approve"
 }
 
 // JobConfig represents a job configuration in the workspace
@@ -483,6 +498,20 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Validate custom deploy commands if specified
+	if c.CustomDeploy != nil {
+		if err := validateCustomDeployConfig(c.CustomDeploy); err != nil {
+			return fmt.Errorf("custom_deploy validation failed: %w", err)
+		}
+	}
+
+	// Validate custom destroy commands if specified
+	if c.CustomDestroy != nil {
+		if err := validateCustomDestroyConfig(c.CustomDestroy); err != nil {
+			return fmt.Errorf("custom_destroy validation failed: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -667,6 +696,53 @@ func ValidateJobDependencies(jobs []JobConfig) error {
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+// validateCustomDeployConfig validates custom deployment command configuration
+func validateCustomDeployConfig(cfg *CustomDeployConfig) error {
+	if cfg == nil {
+		return nil
+	}
+
+	// At least one command must be specified
+	if cfg.InitCommand == "" && cfg.PlanCommand == "" && cfg.ApplyCommand == "" {
+		return fmt.Errorf("at least one custom command must be specified (init_command, plan_command, or apply_command)")
+	}
+
+	// Validate that commands are not empty strings if specified
+	if cfg.InitCommand != "" && strings.TrimSpace(cfg.InitCommand) == "" {
+		return fmt.Errorf("init_command cannot be empty or whitespace-only")
+	}
+	if cfg.PlanCommand != "" && strings.TrimSpace(cfg.PlanCommand) == "" {
+		return fmt.Errorf("plan_command cannot be empty or whitespace-only")
+	}
+	if cfg.ApplyCommand != "" && strings.TrimSpace(cfg.ApplyCommand) == "" {
+		return fmt.Errorf("apply_command cannot be empty or whitespace-only")
+	}
+
+	return nil
+}
+
+// validateCustomDestroyConfig validates custom destroy command configuration
+func validateCustomDestroyConfig(cfg *CustomDestroyConfig) error {
+	if cfg == nil {
+		return nil
+	}
+
+	// At least one command must be specified
+	if cfg.InitCommand == "" && cfg.DestroyCommand == "" {
+		return fmt.Errorf("at least one custom command must be specified (init_command or destroy_command)")
+	}
+
+	// Validate that commands are not empty strings if specified
+	if cfg.InitCommand != "" && strings.TrimSpace(cfg.InitCommand) == "" {
+		return fmt.Errorf("init_command cannot be empty or whitespace-only")
+	}
+	if cfg.DestroyCommand != "" && strings.TrimSpace(cfg.DestroyCommand) == "" {
+		return fmt.Errorf("destroy_command cannot be empty or whitespace-only")
 	}
 
 	return nil
