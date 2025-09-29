@@ -198,7 +198,8 @@
         - name: Allow SSH through UFW
           ufw:
             rule: allow
-            name: SSH
+            port: '22'
+            proto: tcp
           when: ansible_os_family == "Debian"
 
         - name: Enable UFW

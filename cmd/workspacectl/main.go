@@ -60,148 +60,7 @@ Related Tools:
 }
 
 func main() {
-	// Parse command-line arguments
-	if len(os.Args) >= 2 {
-		command := os.Args[1]
-
-		// Handle deploy command (supports optional mode)
-		if command == "deploy" {
-			if len(os.Args) < 3 || len(os.Args) > 4 {
-				fmt.Fprintf(os.Stderr, "Error: deploy command requires workspace name and optional mode\n\n")
-				printUsage()
-				os.Exit(2)
-			}
-
-			workspaceName := os.Args[2]
-			var mode string
-			if len(os.Args) == 4 {
-				mode = os.Args[3]
-			}
-
-			if err := runDeployCommand(workspaceName, mode); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Handle destroy command
-		if command == "destroy" {
-			if len(os.Args) != 3 {
-				fmt.Fprintf(os.Stderr, "Error: destroy command requires exactly one workspace name\n\n")
-				printUsage()
-				os.Exit(2)
-			}
-
-			workspaceName := os.Args[2]
-			if err := runManualOperation(command, workspaceName); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Handle mode command
-		if command == "mode" {
-			if len(os.Args) != 4 {
-				fmt.Fprintf(os.Stderr, "Error: mode command requires workspace name and mode\n\n")
-				printUsage()
-				os.Exit(2)
-			}
-
-			workspaceName := os.Args[2]
-			mode := os.Args[3]
-			if err := runModeCommand(workspaceName, mode); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Handle status command (can take optional workspace name)
-		if command == "status" {
-			workspaceName := ""
-			if len(os.Args) == 3 {
-				workspaceName = os.Args[2]
-			} else if len(os.Args) > 3 {
-				fmt.Fprintf(os.Stderr, "Error: status command accepts at most one workspace name\n\n")
-				printUsage()
-				os.Exit(2)
-			}
-
-			if err := runStatusCommand(workspaceName); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Handle list command
-		if command == "list" {
-			if err := workspace.RunListCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Handle logs command (requires workspace name)
-		if command == "logs" {
-			if len(os.Args) != 3 {
-				fmt.Fprintf(os.Stderr, "Error: logs command requires exactly one workspace name\n\n")
-				printUsage()
-				os.Exit(2)
-			}
-
-			workspaceName := os.Args[2]
-			if err := runLogsCommand(workspaceName); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Handle workspace management commands
-		switch command {
-		case "add":
-			if err := workspace.RunAddCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "show":
-			if err := workspace.RunShowCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "update":
-			if err := workspace.RunUpdateCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "remove":
-			if err := workspace.RunRemoveCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "validate":
-			if err := workspace.RunValidateCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// If we reach here, it's an unknown command
-		fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n\n", command)
-		printUsage()
-		os.Exit(1)
-	}
-
-	// Parse flags for version/help commands
+	// Handle flags first (version, help)
 	var showVersion = flag.Bool("version", false, "Show version information")
 	var showFullVersion = flag.Bool("version-full", false, "Show detailed version information")
 	var showHelp = flag.Bool("help", false, "Show help information")
@@ -221,6 +80,148 @@ func main() {
 	if *showFullVersion {
 		fmt.Println(version.GetFullVersion())
 		return
+	}
+
+	// Parse command-line arguments
+	args := flag.Args()
+	if len(args) >= 1 {
+		command := args[0]
+
+		// Handle deploy command (supports optional mode)
+		if command == "deploy" {
+			if len(args) < 2 || len(args) > 3 {
+				fmt.Fprintf(os.Stderr, "Error: deploy command requires workspace name and optional mode\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			workspaceName := args[1]
+			var mode string
+			if len(args) == 3 {
+				mode = args[2]
+			}
+
+			if err := runDeployCommand(workspaceName, mode); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle destroy command
+		if command == "destroy" {
+			if len(args) != 2 {
+				fmt.Fprintf(os.Stderr, "Error: destroy command requires exactly one workspace name\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			workspaceName := args[1]
+			if err := runManualOperation(command, workspaceName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle mode command
+		if command == "mode" {
+			if len(args) != 3 {
+				fmt.Fprintf(os.Stderr, "Error: mode command requires workspace name and mode\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			workspaceName := args[1]
+			mode := args[2]
+			if err := runModeCommand(workspaceName, mode); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle status command (can take optional workspace name)
+		if command == "status" {
+			workspaceName := ""
+			if len(args) == 2 {
+				workspaceName = args[1]
+			} else if len(args) > 2 {
+				fmt.Fprintf(os.Stderr, "Error: status command accepts at most one workspace name\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			if err := runStatusCommand(workspaceName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle list command
+		if command == "list" {
+			if err := workspace.RunListCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle logs command (requires workspace name)
+		if command == "logs" {
+			if len(args) != 2 {
+				fmt.Fprintf(os.Stderr, "Error: logs command requires exactly one workspace name\n\n")
+				printUsage()
+				os.Exit(2)
+			}
+
+			workspaceName := args[1]
+			if err := runLogsCommand(workspaceName); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Handle workspace management commands
+		switch command {
+		case "add":
+			if err := workspace.RunAddCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "show":
+			if err := workspace.RunShowCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "update":
+			if err := workspace.RunUpdateCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "remove":
+			if err := workspace.RunRemoveCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "validate":
+			if err := workspace.RunValidateCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// If we reach here, it's an unknown command
+		fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n\n", command)
+		printUsage()
+		os.Exit(1)
 	}
 
 	// No command specified

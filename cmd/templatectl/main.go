@@ -48,57 +48,7 @@ Related Tools:
 }
 
 func main() {
-	// Parse command-line arguments
-	if len(os.Args) >= 2 {
-		command := os.Args[1]
-
-		// Handle template commands
-		switch command {
-		case "add":
-			if err := template.RunAddCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "list":
-			if err := template.RunListCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "show":
-			if err := template.RunShowCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "update":
-			if err := template.RunUpdateCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "remove":
-			if err := template.RunRemoveCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		case "validate":
-			if err := template.RunValidateCommand(os.Args[2:]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		default:
-			// Unknown command
-			fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n\n", command)
-			printUsage()
-			os.Exit(1)
-		}
-	}
-
-	// Parse flags for version/help commands
+	// Handle flags first (version, help)
 	var showVersion = flag.Bool("version", false, "Show version information")
 	var showFullVersion = flag.Bool("version-full", false, "Show detailed version information")
 	var showHelp = flag.Bool("help", false, "Show help information")
@@ -118,6 +68,57 @@ func main() {
 	if *showFullVersion {
 		fmt.Println(version.GetFullVersion())
 		return
+	}
+
+	// Parse command-line arguments
+	args := flag.Args()
+	if len(args) >= 1 {
+		command := args[0]
+
+		// Handle template commands
+		switch command {
+		case "add":
+			if err := template.RunAddCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "list":
+			if err := template.RunListCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "show":
+			if err := template.RunShowCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "update":
+			if err := template.RunUpdateCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "remove":
+			if err := template.RunRemoveCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "validate":
+			if err := template.RunValidateCommand(args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		default:
+			// Unknown command
+			fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n\n", command)
+			printUsage()
+			os.Exit(1)
+		}
 	}
 
 	// No command specified
