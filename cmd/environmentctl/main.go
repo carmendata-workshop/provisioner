@@ -57,7 +57,7 @@ func showUsage() {
 func showVersion() {
 	info := version.GetBuildInfo()
 	fmt.Printf("environmentctl %s\n", info.Version)
-	fmt.Printf("Built: %s\n", info.BuildTime)
+	fmt.Printf("Built: %s\n", info.BuildDate)
 	fmt.Printf("Commit: %s\n", info.GitCommit)
 }
 

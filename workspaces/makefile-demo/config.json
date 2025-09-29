@@ -1,0 +1,15 @@
+{
+  "enabled": false,
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "custom_deploy": {
+    "init_command": "make init",
+    "plan_command": "make plan",
+    "apply_command": "make deploy"
+  },
+  "custom_destroy": {
+    "init_command": "make init",
+    "destroy_command": "make destroy"
+  },
+  "description": "Demo workspace showing custom Makefile-based deployment commands"
+}

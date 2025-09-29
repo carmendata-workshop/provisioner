@@ -14,6 +14,7 @@ The Provisioner automatically manages OpenTofu workspaces on a schedule, allowin
 
 ## Features
 
+- **Custom deployment commands** - Override OpenTofu commands with Makefiles, scripts, or custom orchestration tools
 - **Job Scheduling System** - Run scheduled tasks within workspaces and standalone operations
 - **Mode-based deployments** - Deploy workspaces in different resource configurations (hibernation, busy, maintenance) with automatic mode transitions
 - **Enhanced CRON scheduling** - Supports ranges, lists, intervals, and mixed combinations
@@ -203,6 +204,28 @@ Share and version control OpenTofu templates:
   "deploy_schedule": "0 9 * * 1-5"
 }
 ```
+
+### Custom Deployment Commands
+
+Override default OpenTofu commands with custom orchestration:
+
+```json
+{
+  "enabled": true,
+  "deploy_schedule": "0 9 * * 1-5",
+  "destroy_schedule": "0 18 * * 1-5",
+  "custom_deploy": {
+    "init_command": "make init",
+    "plan_command": "make plan",
+    "apply_command": "make deploy"
+  },
+  "custom_destroy": {
+    "destroy_command": "make destroy"
+  }
+}
+```
+
+See the `workspaces/makefile-demo/` directory for a complete example.
 
 ## Key Commands
 
